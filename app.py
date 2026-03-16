@@ -7,6 +7,9 @@ from routes.coach_routes import coach_bp
 from routes.user_routes import user_bp
 from dotenv import load_dotenv
 import os
+
+load_dotenv()
+
 app = Flask(__name__)
 CORS(app)
 
@@ -17,6 +20,7 @@ db_host = os.getenv('DB_HOST')
 db_name = os.getenv('DB_NAME')
 
 app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}'
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'change-me-in-production')
 
 db = SQLAlchemy(app)
 
