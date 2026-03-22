@@ -16,6 +16,47 @@ def verify_password(stored: str, provided: str) -> bool:
     except (ValueError, TypeError):
         return stored == provided
 
+# JWT generation helper function for login and registration
+def issue_auth_token(user_id: int, username: str, role: str) -> str:
+    now = datetime.datetime.now(datetime.timezone.utc)
+    token_payload = {
+        'sub': str(user_id),
+        'username': username,
+        'role': role,
+        'iat': now,
+        'exp': now + datetime.timedelta(hours=24)
+    }
+    return jwt.encode(token_payload, current_app.config['JWT_SECRET_KEY'], algorithm='HS256')
+
+# Helper to build consistent user payload for auth responses
+def build_auth_user_payload(row) -> dict:
+    data = dict(row or {})
+    return {
+        'id': data.get('user_id'),
+        'username': data.get('username'),
+        'role': data.get('role'),
+        'is_banned': data.get('is_banned'),
+        'is_disabled': data.get('is_disabled'),
+        'create_date': data.get('create_date'),
+        'first_name': data.get('first_name'),
+        'last_name': data.get('last_name'),
+        'birthday': data.get('birthday'),
+        'profile_picture_url': data.get('profile_picture_url'),
+        'current_weight': data.get('current_weight'),
+        'goal_weight': data.get('goal_weight'),
+        'goal_type': data.get('goal_type'),
+        'information': data.get('information')
+    }
+
+# Helper to build consistent auth success response
+def build_auth_success_response(token: str, user_payload: dict, status_code: int):
+    return jsonify({
+        'status': 'success',
+        'message': 'Authentication successful.',
+        'token': token,
+        'user': user_payload
+    }), status_code
+
 #login Route
 @auth_bp.route('/login', methods=['POST'])
 def login():
@@ -38,10 +79,12 @@ def login():
             'SELECT '
             'ul.user_id, ul.username, ul.password_hash, '
             'u.role, u.is_banned, u.is_disabled, u.create_date, '
-            'up.first_name, up.last_name, up.profile_picture_url, up.current_weight '
+            'up.first_name, up.last_name, up.birthday, up.profile_picture_url, up.current_weight, '
+            'g.goal_weight, g.goal_type, g.information '
             'FROM User_login ul '
             'JOIN Users u ON ul.User_id = u.User_id '
             'JOIN User_Profiles up ON u.User_id = up.user_id '
+            'LEFT JOIN goals g ON g.user_id = u.user_id '
             'WHERE ul.username = :username '
             'LIMIT 1'
         )
@@ -68,26 +111,16 @@ def login():
         }), 401
 
     # Build user data
-    HIDDEN = {'password_hash'}
-    user_data = {k: v for k, v in dict(row).items() if k not in HIDDEN}
+    user_data = build_auth_user_payload(row)
 
     # JWT
-    secret = current_app.config['JWT_SECRET_KEY']
-    token_payload = {
-        'sub':      str(row.get('user_id')),
-        'username': row.get('username'),
-        'role':     row.get('role'),
-        'iat':      datetime.datetime.now(datetime.timezone.utc),
-        'exp':      datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
-    }
-    token = jwt.encode(token_payload, secret, algorithm='HS256')
+    token = issue_auth_token(
+        user_id=row.get('user_id'),
+        username=row.get('username'),
+        role=row.get('role')
+    )
 
-    return jsonify({
-        'status':  'success',
-        'message': 'Login successful.',
-        'token':   token,
-        'user':    user_data
-    }), 200
+    return build_auth_success_response(token=token, user_payload=user_data, status_code=200)
 
 @auth_bp.route('/check-username', methods=['POST'])
 def checkusername():
@@ -140,6 +173,7 @@ def register():
     current_weight = payload.get('current_weight')
     goal_weight = payload.get('goal_weight')
     goal_type = payload.get('goal_type')
+    information = payload.get('goal_text')
 
     if not all([username, password, first_name, last_name, birthday, current_weight, goal_weight]):
         return jsonify({
@@ -216,13 +250,14 @@ def register():
         session.execute(
             text(
                 'INSERT INTO goals '
-                '(user_id, goal_weight, goal_type) '
-                'VALUES (:uid, :fn, :ln)'
+                '(user_id, goal_weight, goal_type, information) '
+                'VALUES (:uid, :fn, :ln, :goal_text)'
             ),
             {
                 'uid': user_id,
                 'fn': goal_weight,
-                'ln': goal_type
+                'ln': goal_type,
+                'goal_text': information
             }
         )
 
@@ -242,8 +277,26 @@ def register():
                     'is_nutritionist': 1 if (certifications and 'nutritionist' in certifications) else 0
                 }
             )
+            coach_profile_id = session.execute(text('SELECT LAST_INSERT_ID()')).scalar()
 
-        # 6. If payment info provided, insert into Payment_details
+        #6 if coach, insert avalibility
+            if is_coach and availability:
+                for slot in availability:
+                    session.execute(
+                        text(
+                            'INSERT INTO Coach_Availability '
+                            '(coach_id, DOW, start_time, end_time) '
+                            'VALUES (:cid, :dow, :start, :end)'
+                        ),
+                        {
+                            'cid': coach_profile_id,
+                            'dow': slot.get('dow'),
+                            'start': slot.get('start_time'),
+                            'end': slot.get('end_time')
+                        }
+                    )
+
+        # 7. If payment info provided, insert into Payment_details
         if cardName:
             session.execute(
                 text(
@@ -262,32 +315,36 @@ def register():
 
         session.commit()
 
-        # 7. Issue JWT
-        secret = current_app.config['JWT_SECRET_KEY']
-        token_payload = {
-            'sub':      str(user_id),
-            'username': username,
-            'role':     role,
-            'iat':      datetime.datetime.now(datetime.timezone.utc),
-            'exp':      datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
-        }
-        token = jwt.encode(token_payload, secret, algorithm='HS256')
+        # 8. Issue JWT
+        token = issue_auth_token(
+            user_id=user_id,
+            username=username,
+            role=role
+        )
 
-        return jsonify({
-            'status':  'success',
-            'message': 'Registration successful.',
-            'token':   token,
-            'user': {
-                'id':         user_id,
-                'username':   username,
-                'role':       role,
-                'first_name': first_name,
-                'last_name':  last_name,
-                'birthday':   birthday,
-                'current_weight': current_weight,
-                'goal_weight':    goal_weight
-            }
-        }), 201
+        # Return the same user payload shape as /auth/login.
+        user_row = session.execute(
+            text(
+                'SELECT '
+                'ul.user_id, ul.username, '
+                'u.role, u.is_banned, u.is_disabled, u.create_date, '
+                'up.first_name, up.last_name, up.birthday, up.profile_picture_url, up.current_weight, '
+                'g.goal_weight, g.goal_type, g.information '
+                'FROM User_login ul '
+                'JOIN Users u ON ul.User_id = u.User_id '
+                'JOIN User_Profiles up ON u.User_id = up.user_id '
+                'LEFT JOIN goals g ON g.user_id = u.user_id '
+                'WHERE ul.user_id = :uid '
+                'LIMIT 1'
+            ),
+            {'uid': user_id}
+        ).mappings().first()
+
+        return build_auth_success_response(
+            token=token,
+            user_payload=build_auth_user_payload(user_row),
+            status_code=201
+        )
 
     except Exception as e:
         session.rollback()
