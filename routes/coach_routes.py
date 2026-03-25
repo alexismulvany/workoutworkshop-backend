@@ -101,13 +101,13 @@ def coach_availibility(coach_id):
         coach = db.session.execute(db.text(query), {"coach_id": coach_id}).fetchall()
         coach_list = [{"DOW":c[0]} for c in coach]
         daysofWeek=["SUN", "M", "T", "W", "TH", "F", "SAT"]
-        coach_availibility=[{}]
+        coach_availibility={}
 
         for i in daysofWeek:
-            coach_availibility[0][i] = False
+            coach_availibility[i] = False
         
         for i in coach_list:
-            coach_availibility[0][i["DOW"]] = True
+            coach_availibility[i["DOW"]] = True
 
         
         return jsonify({
