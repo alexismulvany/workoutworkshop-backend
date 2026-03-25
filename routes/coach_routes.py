@@ -61,11 +61,24 @@ def user_coach_sub(user_id, coach_id):
         WHERE c_s.user_id = :user_id and c_s.coach_id = :coach_id
         """
         subscription = db.session.execute(db.text(query), {"user_id": user_id, "coach_id": coach_id}).fetchone()
-        if subscription:
+
+        query = """SELECT * FROM coach_subscriptions c_s
+        WHERE c_s.user_id = :user_id"""
+        
+        hasCoach = db.session.execute(db.text(query), {"user_id": user_id}).fetchone()
+        if hasCoach:
+            if subscription:
+                return jsonify({
+                    "status": "success",
+                    "hired": True,
+                    "hasCoach": True
+                }), 200
+
             return jsonify({
                 "status": "success",
-                "hired": True
+                "hasCoach": True
             }), 200
+        
         else:
             return jsonify({
                 "status": "success",
@@ -202,4 +215,54 @@ def fire_coach():
     except:
         return jsonify({"message":"Error sending application"}), 400
 
+@coach_bp.route('/submit-coach-review', methods=['POST'])
+def submit_review():
+
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        user_id = payload.get('user_id')
+        coach_id = payload.get('coach_id')
+        rating = payload.get('rating')
+        message = payload.get('message')
+
+        if not all([user_id, coach_id, rating]):
+            print("missing data")
+            return jsonify({
+                'status':  'error',
+                'message': 'user_id, rating, and coach_id are required.'
+            }), 400
+
+        db  = current_app.extensions['sqlalchemy']
+        session = db.session
+
+        if message:
+            print("got message")
+            message = payload.get('message')
+
+            session.execute(
+            text(
+                'insert into coach_reviews (user_id, coach_id, rating, comment) values (:user_id, :coach_id, :rating, :message)'
+            ),
+                {'user_id': user_id, 'coach_id': coach_id, 'rating': rating, 'message': message}
+            )
+
+        else:
+            session.execute(
+            text(
+                'insert into coach_reviews (user_id, coach_id, rating) values (:user_id, :coach_id, :rating)'
+            ),
+                {'user_id': user_id, 'coach_id': coach_id, 'rating': rating}
+            )
+
+        session.commit()
+        return jsonify({"message":"Application successfull"}), 200
+
+    except: 
+        return jsonify({"message":"Error sending application"}), 400
+        
+
+
+
+    
 
