@@ -52,12 +52,12 @@ def check_survey():
     db = current_app.extensions['sqlalchemy']
 
     query = text(
-        'SELECT result '
+        'SELECT result AS rating '
         'FROM Daily_Survey '
         'WHERE user_id = :uid '
         'AND date >= :start_time '
         'AND date <= :end_time '
-        'ORDER BY created_at DESC '
+        'ORDER BY date DESC '
         'LIMIT 1'
     )
 
@@ -142,13 +142,12 @@ def save_daily_survey():
         if update_result.rowcount == 0:
             session.execute(
                 text(
-                    'INSERT INTO Daily_Survey (user_id, result, date) '
-                    'VALUES (:uid, :result, :created_at)'
+                    'INSERT INTO Daily_Survey (user_id, result) '
+                    'VALUES (:uid, :result)'
                 ),
                 {
                     'uid': user_id,
                     'result': rating_value,
-                    'created_at': target_date_start
                 }
             )
             created = True
