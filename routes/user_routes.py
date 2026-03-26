@@ -192,6 +192,40 @@ def update_goals():
         return jsonify({'status': 'error', 'message': 'Database error', 'detail': str(e)}), 500
 
 
+@user_bp.route('/delete-account', methods=['DELETE'])
+def delete_account():
+    # Verify User token
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user_id = payload['sub']
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
+
+    db = current_app.extensions['sqlalchemy']
+
+    try:
+        # Delete from child tables
+        db.session.execute(text('DELETE FROM goals WHERE user_id = :uid'), {'uid': user_id})
+        db.session.execute(text('DELETE FROM User_Profiles WHERE user_id = :uid'), {'uid': user_id})
+
+        #Delete from parent table
+        db.session.execute(text('DELETE FROM User_login WHERE user_id = :uid'), {'uid': user_id})
+
+        db.session.commit()
+
+        return jsonify({'status': 'success', 'message': 'Account deleted successfully'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print("DATABASE ERROR ON DELETE:", str(e))
+        return jsonify({'status': 'error', 'message': 'Database error', 'detail': str(e)}), 500
+
+
 def _decode_user_id_from_token() -> tuple[int | None, str | None]:
     token = request.headers.get('Authorization')
     if not token:
