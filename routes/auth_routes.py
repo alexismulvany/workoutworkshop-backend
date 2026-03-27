@@ -182,8 +182,7 @@ def register():
         }), 400
 
     # Optional payment fields
-    cardName = payload.get('cardName')
-    cardNumber = payload.get('cardNumber')
+    cardNumber =payload.get('cardNumber')
     cardExpMonth = payload.get('cardExpMonth')
     cardExpYear = payload.get('cardExpYear')
     cardCVC = payload.get('cardCVC')
@@ -297,18 +296,18 @@ def register():
                     )
 
         # 7. If payment info provided, insert into Payment_details
-        if cardName:
+        if cardNumber:
             session.execute(
                 text(
-                    'INSERT INTO Payment_Info '
+                    'INSERT INTO payment_details '
                     '(user_id, card_num, exp_month, exp_year, CVV) '
                     'VALUES (:uid, :number, :exp_month ,:exp_year, :cvc)'
                 ),
                 {
                     'uid':    user_id,
                     'number': cardNumber,
-                    'exp_month':    cardExpMonth,
-                    'exp_year':    cardExpYear,
+                    'exp_month': cardExpMonth,
+                    'exp_year': cardExpYear,
                     'cvc':    cardCVC
                 }
             )
