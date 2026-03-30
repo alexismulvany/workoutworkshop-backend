@@ -16,19 +16,59 @@ def admin_test():
 @admin_bp.route('/admin/coach-applications', methods=['GET'])
 def coach_applications(): # Get the information on Coach Applications
     db = current_app.extensions['sqlalchemy']
-    
+
     try:
-        query = """
-                SELECT cp.coach_id, CONCAT(up.first_name, ' ', up.last_name) AS display_name, cc.certification_id, cc.status
-                FROM coach_certifications cc
-                JOIN coach_profiles cp ON cc.coach_id = cp.coach_id
-                JOIN user_profiles up ON cp.user_id = up.user_id
-                WHERE cc.status = 'pending'
-                """
-        
-        result = db.session.execute(db.text(query)).fetchall()
+        page = max(int(request.args.get('page', 1)), 1)
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        limit = int(request.args.get('limit', 10))
+    except (TypeError, ValueError):
+        limit = 10
+
+    limit = min(max(limit, 1), 100)
+    search = (request.args.get('search') or '').strip()
+    offset = (page - 1) * limit
+
+    where_sql = "WHERE cc.status = 'pending' "
+    params = {'limit': limit, 'offset': offset}
+
+    if search:
+        where_sql += (
+            'AND ('
+            'CONCAT(up.first_name, " ", up.last_name) LIKE :search '
+            'OR CAST(cp.coach_id AS CHAR) LIKE :search '
+            'OR CAST(cc.certification_id AS CHAR) LIKE :search'
+            ') '
+        )
+        params['search'] = f'%{search}%'
+
+    count_sql = text(
+        'SELECT COUNT(*) AS total '
+        'FROM coach_certifications cc '
+        'JOIN coach_profiles cp ON cc.coach_id = cp.coach_id '
+        'JOIN user_profiles up ON cp.user_id = up.user_id '
+        f'{where_sql}'
+    )
+
+    data_sql = text(
+        'SELECT '
+        'cp.coach_id, CONCAT(up.first_name, " ", up.last_name) AS display_name, '
+        'cc.certification_id, cc.status '
+        'FROM coach_certifications cc '
+        'JOIN coach_profiles cp ON cc.coach_id = cp.coach_id '
+        'JOIN user_profiles up ON cp.user_id = up.user_id '
+        f'{where_sql}'
+        'ORDER BY cc.certification_id ASC '
+        'LIMIT :limit OFFSET :offset'
+    )
+
+    try:
+        total_applications = db.session.execute(count_sql, params).scalar() or 0
+        result = db.session.execute(data_sql, params).fetchall()
+
         applications = []
-        
         for row in result:
             applications.append({
                 "coach_id": row.coach_id,
@@ -36,9 +76,16 @@ def coach_applications(): # Get the information on Coach Applications
                 "certification_id": row.certification_id,
                 "status": row.status
             })
-        
-        return jsonify(applications)
-    
+
+        total_pages = max(ceil(total_applications / limit), 1)
+
+        return jsonify({
+            "applications": applications,
+            "totalPages": total_pages,
+            "currentPage": page,
+            "totalApplications": total_applications
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -48,10 +95,9 @@ def coach_application_details(coach_id): # Get the information for one Coach App
     
     try:
         query_coach = """
-                      SELECT CONCAT(up.first_name, ' ', up.last_name) AS display_name, cp.pricing, cp.bio, cc.file_url, cc.certification_id
+                      SELECT CONCAT(up.first_name, ' ', up.last_name) AS display_name, cp.pricing, cp.bio
                       FROM coach_profiles cp
                       JOIN user_profiles up ON cp.user_id = up.user_id
-                      JOIN coach_certifications cc ON cp.coach_id = cc.coach_id
                       WHERE cp.coach_id = :coach_id
                       """
         
@@ -59,7 +105,24 @@ def coach_application_details(coach_id): # Get the information for one Coach App
         
         if not result:
             return jsonify({"error": "Coach Not Found"}), 404
-        
+
+        query_certs = """
+                      SELECT certification_id, file_url, status
+                      FROM coach_certifications
+                      WHERE coach_id = :coach_id
+                      ORDER BY certification_id ASC
+                      """
+
+        cert_rows = db.session.execute(db.text(query_certs), {"coach_id": coach_id}).fetchall()
+        certifications = [
+            {
+                "certification_id": row.certification_id,
+                "certification_url": row.file_url,
+                "status": row.status
+            }
+            for row in cert_rows
+        ]
+
         query_available = """
                           SELECT DOW, start_time, end_time
                           FROM coach_availability
@@ -76,13 +139,17 @@ def coach_application_details(coach_id): # Get the information for one Coach App
                 "start_time": str(row.start_time),
                 "end_time": str(row.end_time)
             })
-        
+
+        first_cert = certifications[0] if certifications else None
+
         return jsonify({
             "name": result.display_name,
             "payment": result.pricing,
             "bio": result.bio,
-            "certification_url": result.file_url,
-            "certification_id": result.certification_id,
+            # New plural fields for multiple certifications
+            "certification_urls": [c["certification_url"] for c in certifications if c.get("certification_url")],
+            "certification_ids": [c["certification_id"] for c in certifications],
+            "certifications": certifications,
             "availability": availability
         })
     
@@ -93,7 +160,7 @@ def coach_application_details(coach_id): # Get the information for one Coach App
 def approve_certification(certification_id): # Update the Certification as Approved
     db = current_app.extensions['sqlalchemy']
     data = request.get_json()
-    admin_id = data.get("user_id")
+    admin_id = data.get("admin_id")
     
     try:
         query_certification = """
@@ -124,7 +191,7 @@ def approve_certification(certification_id): # Update the Certification as Appro
 def reject_certification(certification_id): # Update the Certification as Rejected
     db = current_app.extensions['sqlalchemy']
     data = request.get_json()
-    admin_id = data.get("user_id")
+    admin_id = data.get("admin_id")
     
     try:
         query_certification = """
@@ -156,19 +223,60 @@ def reject_certification(certification_id): # Update the Certification as Reject
 @admin_bp.route('/admin/coach-reports', methods=['GET'])
 def coach_reports(): # Get the information on Coach Reports
     db = current_app.extensions['sqlalchemy']
-    
+
     try:
-        query = """
-                SELECT cr.report_id, cp.coach_id, CONCAT(up.first_name, ' ', up.last_name) AS display_name, cr.reason, cr.status
-                FROM coach_reports cr
-                JOIN coach_profiles cp ON cr.coach_id = cp.coach_id
-                JOIN user_profiles up ON cp.user_id = up.user_id
-                WHERE cr.status = 'pending'
-                """
-        
-        result = db.session.execute(db.text(query)).fetchall()
+        page = max(int(request.args.get('page', 1)), 1)
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        limit = int(request.args.get('limit', 10))
+    except (TypeError, ValueError):
+        limit = 10
+
+    limit = min(max(limit, 1), 100)
+    search = (request.args.get('search') or '').strip()
+    offset = (page - 1) * limit
+
+    where_sql = "WHERE cr.status = 'pending' "
+    params = {'limit': limit, 'offset': offset}
+
+    if search:
+        where_sql += (
+            'AND ('
+            'CONCAT(up.first_name, " ", up.last_name) LIKE :search '
+            'OR cr.reason LIKE :search '
+            'OR CAST(cr.report_id AS CHAR) LIKE :search '
+            'OR CAST(cp.coach_id AS CHAR) LIKE :search'
+            ') '
+        )
+        params['search'] = f'%{search}%'
+
+    count_sql = text(
+        'SELECT COUNT(*) AS total '
+        'FROM coach_reports cr '
+        'JOIN coach_profiles cp ON cr.coach_id = cp.coach_id '
+        'JOIN user_profiles up ON cp.user_id = up.user_id '
+        f'{where_sql}'
+    )
+
+    data_sql = text(
+        'SELECT '
+        'cr.report_id, cp.coach_id, CONCAT(up.first_name, " ", up.last_name) AS display_name, '
+        'cr.reason, cr.status '
+        'FROM coach_reports cr '
+        'JOIN coach_profiles cp ON cr.coach_id = cp.coach_id '
+        'JOIN user_profiles up ON cp.user_id = up.user_id '
+        f'{where_sql}'
+        'ORDER BY cr.report_id ASC '
+        'LIMIT :limit OFFSET :offset'
+    )
+
+    try:
+        total_reports = db.session.execute(count_sql, params).scalar() or 0
+        result = db.session.execute(data_sql, params).fetchall()
+
         reports = []
-        
         for row in result:
             reports.append({
                 "report_id": row.report_id,
@@ -177,9 +285,16 @@ def coach_reports(): # Get the information on Coach Reports
                 "reason": row.reason,
                 "status": row.status
             })
-        
-        return jsonify(reports)
-    
+
+        total_pages = max(ceil(total_reports / limit), 1)
+
+        return jsonify({
+            "reports": reports,
+            "totalPages": total_pages,
+            "currentPage": page,
+            "totalReports": total_reports
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -190,10 +305,11 @@ def coach_report_details(report_id): # Get the information for one Coach Report
     try:
         query = """
                 SELECT cr.report_id, cr.reason, cr.status, cp.coach_id, cp.pricing, cp.is_active, cp.is_nutritionist, cp.bio,
-                       up.user_id, CONCAT(up.first_name, ' ', up.last_name) AS display_name, up.profile_picture_url
+                       up.user_id, CONCAT(up.first_name, ' ', up.last_name) AS display_name, up.profile_picture_url, AVG(crv.rating) as rating
                 FROM coach_reports cr
                 JOIN coach_profiles cp ON cr.coach_id = cp.coach_id
                 JOIN user_profiles up ON cp.user_id = up.user_id
+                JOIN coach_reviews crv ON cp.coach_id = crv.coach_id
                 WHERE cr.report_id = :report_id
                 """
         
@@ -213,6 +329,7 @@ def coach_report_details(report_id): # Get the information for one Coach Report
                 "profile_picture": result.profile_picture_url,
                 "bio": result.bio,
                 "pricing": float(result.pricing),
+                "rating": float(result.rating) if result.rating is not None else None,
                 "is_active": bool(result.is_active),
                 "is_nutritionist": bool(result.is_nutritionist)
             }
