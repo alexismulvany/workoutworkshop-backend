@@ -1,11 +1,16 @@
 from flask import Blueprint, jsonify, request, current_app
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 from sqlalchemy import text
 import jwt
 import datetime
 import traceback
+import os
+import json
 
 auth_bp = Blueprint('auth_bp', __name__, url_prefix='/auth')
+
+CERT_UPLOAD_FOLDER = 'static/certifications'
 
 # Password check helper function
 def verify_password(stored: str, provided: str) -> bool:
@@ -158,10 +163,161 @@ def checkusername():
     }), 200
 
 
+def _to_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {'1', 'true', 't', 'yes', 'y', 'on'}
+
+
+def _normalize_optional(value):
+    if value is None:
+        return None
+    text_value = str(value).strip()
+    if text_value.lower() in {'', 'none', 'null', 'undefined'}:
+        return None
+    return text_value
+
+
+def _parse_form_availability(form) -> list:
+    parsed = []
+    for raw in form.getlist('availability'):
+        if not raw:
+            continue
+        try:
+            item = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+
+        if isinstance(item, list):
+            parsed.extend([x for x in item if isinstance(x, (dict, str))])
+        elif isinstance(item, (dict, str)):
+            parsed.append(item)
+
+    return parsed
+
+
+def _normalize_registration_availability(availability) -> list:
+    if not availability:
+        return []
+
+    allowed_dow = {'SUN', 'M', 'T', 'W', 'TH', 'F', 'SAT'}
+
+    def normalize_time(value, fallback):
+        v = str(value).strip() if value is not None else ''
+        if not v:
+            return fallback
+        if len(v) == 5 and v.count(':') == 1:
+            return f'{v}:00'
+        return v
+
+    slots = []
+
+    # Primary supported format:
+    # [
+    #   {"dow":"M","start_time":"09:00:00","end_time":"11:00:00"},
+    #   {"dow":"W","start_time":"10:00:00","end_time":"12:00:00"}
+    # ]
+    if isinstance(availability, list):
+        for item in availability:
+            if not isinstance(item, dict):
+                continue
+            dow = str(item.get('dow') or '').strip().upper()
+            if dow not in allowed_dow:
+                continue
+            slots.append({
+                'dow': dow,
+                'start_time': normalize_time(item.get('start_time'), '00:00:00'),
+                'end_time': normalize_time(item.get('end_time'), '23:59:59')
+            })
+        return slots
+
+
+def _extract_registration_input():
+    form = request.form
+
+    certifications = [c for c in form.getlist('certifications') if c]
+    availability = _parse_form_availability(form)
+    files = [
+        file for key, file in sorted(request.files.items())
+        if key.startswith('certificationFile_') and file and file.filename
+    ]
+
+    return {
+        'username': (form.get('username') or '').strip(),
+        'password': form.get('password') or '',
+        'first_name': (form.get('first_name') or '').strip(),
+        'last_name': (form.get('last_name') or '').strip(),
+        'birthday': form.get('birthday'),
+        'is_coach': _to_bool(form.get('is_coach', False)),
+        'current_weight': form.get('current_weight'),
+        'goal_weight': form.get('goal_weight'),
+        'goal_type': form.get('goal_type'),
+        'goal_text': form.get('goal_text'),
+        'certifications': certifications,
+        'availability': availability,
+        'pricing': _normalize_optional(form.get('pricing')),
+        'bio': _normalize_optional(form.get('bio')),
+        'cardNumber': _normalize_optional(form.get('cardNumber')),
+        'cardExpMonth': _normalize_optional(form.get('cardExpMonth')),
+        'cardExpYear': _normalize_optional(form.get('cardExpYear')),
+        'cardCVC': _normalize_optional(form.get('cardCVC')),
+        'certification_files': files
+    }
+
+
+def _save_certification_files(files, username: str) -> list:
+    urls = []
+    if not files:
+        return urls
+
+    save_dir = os.path.join(current_app.root_path, CERT_UPLOAD_FOLDER)
+    os.makedirs(save_dir, exist_ok=True)
+
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d%H%M%S')
+    for idx, file in enumerate(files):
+        filename = secure_filename(file.filename or f'cert_{idx}')
+        final_name = f'{username}_{timestamp}_{idx}_{filename}'
+        file_path = os.path.join(save_dir, final_name)
+        file.save(file_path)
+        urls.append(f"{request.host_url.rstrip('/')}/static/certifications/{final_name}")
+
+    return urls
+
+
+def _insert_coach_certifications(session, coach_id: int, certifications: list, file_urls: list):
+    if not file_urls and not certifications:
+        return
+
+    columns = {
+        row[0].lower()
+        for row in session.execute(text('SHOW COLUMNS FROM coach_certifications')).fetchall()
+    }
+
+    has_name_col = 'certification_name' in columns
+    has_file_col = 'file_url' in columns
+    has_status_col = 'status' in columns
+
+    entries = max(len(file_urls), len(certifications), 1)
+    for idx in range(entries):
+        data = {'coach_id': coach_id}
+        if has_status_col:
+            data['status'] = 'pending'
+        if has_name_col and idx < len(certifications):
+            data['certification_name'] = certifications[idx]
+        if has_file_col and idx < len(file_urls):
+            data['file_url'] = file_urls[idx]
+
+        col_sql = ', '.join(data.keys())
+        val_sql = ', '.join(f':{k}' for k in data.keys())
+        session.execute(
+            text(f'INSERT INTO coach_certifications ({col_sql}) VALUES ({val_sql})'),
+            data
+        )
+
 # Register Route
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    payload = request.get_json(silent=True) or {}
+    payload = _extract_registration_input()
 
     # --- Required fields ---
     username   = (payload.get('username') or '').strip()
@@ -182,16 +338,20 @@ def register():
         }), 400
 
     # Optional payment fields
-    cardNumber =payload.get('cardNumber')
+    cardNumber = payload.get('cardNumber')
     cardExpMonth = payload.get('cardExpMonth')
     cardExpYear = payload.get('cardExpYear')
     cardCVC = payload.get('cardCVC')
 
     #  Coach-only fields
-    certifications = payload.get('certifications')
+    certifications = payload.get('certifications') or []
+    if isinstance(certifications, str):
+        certifications = [certifications]
     pricing  = payload.get('pricing')
     bio = payload.get('bio')
-    availability = payload.get('availability')
+    availability = payload.get('availability') or []
+    availability = _normalize_registration_availability(availability)
+    certification_files = payload.get('certification_files') or []
 
     db  = current_app.extensions['sqlalchemy']
     session = db.session
@@ -273,13 +433,13 @@ def register():
                     'price': pricing,
                     'bio':   bio,
                     'is_active': 0 , # New coaches start as inactive until approved by admin
-                    'is_nutritionist': 1 if (certifications and 'nutritionist' in certifications) else 0
+                    'is_nutritionist': 1 if any('nutritionist' in str(c).lower() for c in certifications) else 0
                 }
             )
             coach_profile_id = session.execute(text('SELECT LAST_INSERT_ID()')).scalar()
 
         #6 if coach, insert avalibility
-            if is_coach and availability:
+            if availability:
                 for slot in availability:
                     session.execute(
                         text(
@@ -289,11 +449,14 @@ def register():
                         ),
                         {
                             'cid': coach_profile_id,
-                            'dow': slot.get('dow'),
+                            'dow': slot.get('dow') or slot.get('day_of_week'),
                             'start': slot.get('start_time'),
                             'end': slot.get('end_time')
                         }
                     )
+
+            cert_urls = _save_certification_files(certification_files, username)
+            _insert_coach_certifications(session, coach_profile_id, certifications, cert_urls)
 
         # 7. If payment info provided, insert into Payment_details
         if cardNumber:
