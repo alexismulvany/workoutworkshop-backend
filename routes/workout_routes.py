@@ -34,7 +34,7 @@ def get_daily_plan(user_id, DOW):
     try:
         #Grab all exercises that are available
         query = text("""
-                    select wp.plan_id, pe.exercise_id, e.name, e.equipment_needed, pe.sets, pe.reps, pe.weight from workout_plans wp
+                    select wp.plan_id, pe.exercise_id, e.name, e.video_url, e.equipment_needed, pe.sets, pe.reps, pe.weight from workout_plans wp
                     join plan_exercise pe
                     on wp.plan_id = pe.plan_id
                     join exercises e
@@ -110,3 +110,34 @@ def save_workout():
         db.session.rollback()
         print("DATABASE ERROR:", str(e))
         return jsonify({'status': 'error', 'message': 'Failed to save workout'}), 500
+
+@workout_bp.route('/remove', methods=["POST"])
+def remove_workout_from_plan():
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        plan_id = payload.get('plan_id')
+        exercise_id = payload.get('exercise_id')
+
+        if not all([plan_id, exercise_id]):
+            return jsonify({
+                'status':  'error',
+                'message': 'failed to recieve plan_id or exercise_id'
+            }), 400
+
+        db  = current_app.extensions['sqlalchemy']
+        session = db.session
+
+        session.execute(
+            text(
+                'delete from plan_exercise where plan_id=:plan_id and exercise_id=:exercise_id'
+            ),
+                {'plan_id': plan_id, 'exercise_id': exercise_id}
+        )
+
+        session.commit()
+
+        return jsonify({"message":"Exercise Removed"}), 200
+        
+    except:
+        return jsonify({"message":"Error Removing Exercise"}), 400
