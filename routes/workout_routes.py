@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, current_app
+from flask import Blueprint, jsonify, current_app, request
 from sqlalchemy import text
 
 workout_bp = Blueprint('workout', __name__, url_prefix='/api/workouts')
@@ -53,3 +53,60 @@ def get_daily_plan(user_id, DOW):
     except Exception as e:
         print("DATABASE ERROR:", str(e))
         return jsonify({'status': 'error', 'message': 'Failed to fetch exercises'}), 500
+
+
+@workout_bp.route('/save', methods=['POST'])
+def save_workout():
+    db = current_app.extensions['sqlalchemy']
+
+    #Get data from Payload
+    data = request.get_json()
+
+    user_id = data.get('user_id')
+    planned_date = data.get('date')
+    workout_name = data.get('workout_name')
+    exercises = data.get('exercises', [])
+
+    # Validates all fields are in the payload
+    if not all([user_id, planned_date, exercises]):
+        return jsonify({'status': 'error', 'message': 'Missing required fields'}), 400
+
+    try:
+        #Insert plan into workout_plans
+        insert_plan_query = text("""
+                                INSERT INTO workout_plans (user_id, planned_date, title)
+                                VALUES (:user_id, :planned_date, :title)
+                                """)
+
+        result = db.session.execute(insert_plan_query, {
+            "user_id": user_id,
+            "planned_date": planned_date,
+            "title": workout_name
+        })
+
+        # get plan_id
+        plan_id = result.lastrowid
+
+        # Insert into plan_exercise for each exercise in the workout
+        insert_exercise_query = text("""
+                                    INSERT INTO plan_exercise (plan_id, exercise_id, sets, reps, weight)
+                                    VALUES (:plan_id, :exercise_id, :sets, :reps, :weight)
+                                    """)
+
+        for exercise in exercises:
+            db.session.execute(insert_exercise_query, {
+                "plan_id": plan_id,
+                "exercise_id": exercise['exercise_id'],
+                "sets": 0,
+                "reps": 0,
+                "weight": 0
+            })
+
+        db.session.commit()
+
+        return jsonify({'status': 'success', 'message': 'Workout saved successfully!'}), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print("DATABASE ERROR:", str(e))
+        return jsonify({'status': 'error', 'message': 'Failed to save workout'}), 500
