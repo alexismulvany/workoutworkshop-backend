@@ -34,7 +34,7 @@ def get_daily_plan(user_id, DOW):
     try:
         #Grab all exercises that are available
         query = text("""
-                    select pe.exercise_id, e.name, e.equipment_needed, pe.sets, pe.reps, pe.weight from workout_plans wp
+                    select wp.plan_id, pe.exercise_id, e.name, e.equipment_needed, pe.sets, pe.reps, pe.weight from workout_plans wp
                     join plan_exercise pe
                     on wp.plan_id = pe.plan_id
                     join exercises e

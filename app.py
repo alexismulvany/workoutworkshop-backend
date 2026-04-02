@@ -5,6 +5,7 @@ from routes.admin_routes import admin_bp
 from routes.auth_routes import auth_bp
 from routes.coach_routes import coach_bp
 from routes.user_routes import user_bp
+from routes.workout_routes import workout_bp
 from dotenv import load_dotenv
 import os
 from sqlalchemy import text
@@ -29,6 +30,7 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(coach_bp)
 app.register_blueprint(user_bp)
+app.register_blueprint(workout_bp)
 
 @app.route('/test-db')
 def test_db():
