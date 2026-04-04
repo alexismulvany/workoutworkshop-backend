@@ -517,3 +517,74 @@ def register():
             'detail':  str(e)
         }), 500
 
+@auth_bp.route('/change-password', methods=['PATCH'])
+def changePassword():
+    # verify user token
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user_id = payload['sub']
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
+
+    # get old password and new password from request body
+    data = request.get_json()
+    old_password = data.get('current_password')
+    new_password = data.get('new_password')
+
+    if not old_password or not new_password:
+        return jsonify({'status': 'error', 'message': 'Password is required'}), 400
+
+    db = current_app.extensions['sqlalchemy']
+
+    # Read user
+    try:
+        sql = text(
+            'SELECT '
+            'ul.user_id, ul.password_hash '
+            'FROM User_login ul '
+            'WHERE ul.user_id = :user_id '
+            'LIMIT 1'
+        )
+        row = db.session.execute(sql, {'user_id': user_id}).mappings().first()
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': 'Database error.',
+            'detail': str(e)
+        }), 500
+
+    if not row:
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid password.'
+        }), 401
+
+    # Verify password
+    stored_pw = row.get('password_hash')
+    if not verify_password(stored_pw, old_password):
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid password.'
+        }), 401
+
+    # Update to new password
+    try:
+        new_password_hash = generate_password_hash(new_password)
+        db.session.execute(
+            text('UPDATE User_login SET password_hash = :pw WHERE user_id = :uid'),
+            {'pw': new_password_hash, 'uid': user_id}
+        )
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': 'Password changed successfully.'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to change password.',
+            'detail': str(e)
+        }), 500
