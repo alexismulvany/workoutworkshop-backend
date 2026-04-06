@@ -222,3 +222,94 @@ def remove_exercise_from_plan(plan_id, exercise_id):
         db.session.rollback()
         print("DATABASE ERROR:", str(e))
         return jsonify({'status': 'error', 'message': 'Failed to remove exercise'}), 500
+
+
+@workout_bp.route('/remove', methods=["POST"])
+def remove_workout_from_plan():
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        plan_id = payload.get('plan_id')
+        exercise_id = payload.get('exercise_id')
+
+        if not all([plan_id, exercise_id]):
+            return jsonify({
+                'status': 'error',
+                'message': 'failed to recieve plan_id or exercise_id'
+            }), 400
+
+        db = current_app.extensions['sqlalchemy']
+        session = db.session
+
+        session.execute(
+            text(
+                'delete from plan_exercise where plan_id=:plan_id and exercise_id=:exercise_id'
+            ),
+            {'plan_id': plan_id, 'exercise_id': exercise_id}
+        )
+
+        session.commit()
+
+        return jsonify({"message": "Exercise Removed"}), 200
+
+    except:
+        return jsonify({"message": "Error Removing Exercise"}), 400
+
+
+@workout_bp.route('/add-workout', methods=["POST"])
+def add_workout_to_plan():
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        planned_date = payload.get("planned_date")
+        user_id = payload.get("user_id")
+        exercise_id = payload.get("exercise_id")
+
+        if not all([planned_date, user_id, exercise_id]):
+            return jsonify({
+                'status': 'error',
+                'message': 'failed to recieve date or exercise_id or user_id'
+            }), 400
+
+        db = current_app.extensions['sqlalchemy']
+        session = db.session
+
+        # check if user has a plan already made for that date
+        query = text("""
+                     select *
+                     from workout_plans
+                     where user_id = :user_id
+                       and planned_date like :planned_date
+                    """)
+
+        result = db.session.execute(query, {"user_id": user_id, "planned_date": planned_date}).mappings().fetchall()
+        if (len(result) > 0):
+            print("1")
+            plan_id = result[0]["plan_id"]
+        else:
+            print("2")
+            query = text("""
+                         insert into workout_plans (user_id, title, planned_date)
+                         values (:user_id, :title, :planned_date)
+                         """)
+            result = db.session.execute(query,
+                                        {"user_id": user_id, "title": planned_date, "planned_date": planned_date})
+            session.commit()
+            plan_id = result.lastrowid  # get the id of the new row
+
+        print("3")
+        db.session.execute(
+            text("""
+                 insert into plan_exercise (plan_id, exercise_id)
+                 values (:plan_id, :exercise_id)
+                 """),
+
+            {"plan_id": plan_id, "exercise_id": exercise_id}
+        )
+
+        print("4")
+        session.commit()
+        return jsonify({"message": "Exercise Adeed"}), 200
+
+    except:
+        return jsonify({"message": "Error Adding Exercise"}), 403
