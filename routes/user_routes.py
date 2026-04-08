@@ -363,12 +363,13 @@ def save_daily_survey():
         if update_result.rowcount == 0:
             session.execute(
                 text(
-                    'INSERT INTO Daily_Survey (user_id, result) '
-                    'VALUES (:uid, :result)'
+                    'INSERT INTO Daily_Survey (user_id, result, date) '
+                    'VALUES (:uid, :result, :survey_date)'
                 ),
                 {
                     'uid': user_id,
                     'result': rating_value,
+                    'survey_date': target_date_start
                 }
             )
             created = True
@@ -389,4 +390,101 @@ def save_daily_survey():
         'created': created
     }), 200
 
+@user_bp.route('/update-payment', methods=['PATCH'])
+def changePayment():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
 
+    token = auth_header.split(' ', 1)[1].strip() if auth_header.startswith('Bearer ') else auth_header.strip()
+    try:
+        payload = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user_id = int(payload.get('sub'))
+    except Exception:
+        return jsonify({'status': 'error', 'message': 'Invalid or expired token'}), 401
+
+    data = request.get_json(silent=True) or {}
+    card_num = data.get('card_number')
+    card_month = data.get('card_month')
+    card_year = data.get('card_year')
+    card_cvv = data.get('card_cvv')
+
+    if not all([card_num, card_month, card_year, card_cvv]):
+        return jsonify({
+            'status': 'error',
+            'message': 'card_number, card_month, card_year, and card_cvv are required.'
+        }), 400
+
+    db = current_app.extensions['sqlalchemy']
+
+    try:
+        existing_payment = db.session.execute(
+            text('SELECT user_id FROM payment_details WHERE user_id = :uid LIMIT 1'),
+            {'uid': user_id}
+        ).mappings().first()
+
+        if existing_payment:
+            db.session.execute(
+                text(
+                    'UPDATE payment_details '
+                    'SET card_num = :number, exp_month = :exp_month, exp_year = :exp_year, CVV = :cvc '
+                    'WHERE user_id = :uid'
+                ),
+                {
+                    'uid': user_id,
+                    'number': card_num,
+                    'exp_month': card_month,
+                    'exp_year': card_year,
+                    'cvc': card_cvv
+                }
+            )
+            action = 'updated'
+        else:
+            db.session.execute(
+                text(
+                    'INSERT INTO payment_details '
+                    '(user_id, card_num, exp_month, exp_year, CVV) '
+                    'VALUES (:uid, :number, :exp_month, :exp_year, :cvc)'
+                ),
+                {
+                    'uid': user_id,
+                    'number': card_num,
+                    'exp_month': card_month,
+                    'exp_year': card_year,
+                    'cvc': card_cvv
+                }
+            )
+            action = 'created'
+
+        db.session.commit()
+        return jsonify({
+            'status': 'success',
+            'message': f'Payment details {action} successfully.',
+            'payment': {
+                'card_number': card_num,
+                'card_month': card_month,
+                'card_year': card_year
+            }
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to update payment details.',
+            'detail': str(e)
+        }), 500
+
+@user_bp.route('/chat/history/<int:me>/<int:other>', methods=['GET'])
+def get_chat_history(me, other):
+    db = current_app.extensions['sqlalchemy']
+    query = text("""
+        SELECT sender_id, content, created_at 
+        FROM message 
+        WHERE (sender_id = :me AND receiver_id = :other)
+           OR (sender_id = :other AND receiver_id = :me)
+        ORDER BY created_at ASC
+    """)
+    result = db.session.execute(query, {"me": me, "other": other}).fetchall()
+
+    messages = [{"sender_id": r.sender_id, "text": r.message_text} for r in result]
+    return jsonify(messages)
