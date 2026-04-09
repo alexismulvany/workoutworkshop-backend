@@ -1,2 +1,17 @@
 .env
+__pycache__
+/venv
+
+
 venv/
+__pycache__/
+
+#IDE files
+.idea/
+
+#Picture files
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif

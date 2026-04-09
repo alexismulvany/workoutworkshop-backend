@@ -3,7 +3,10 @@ from sqlalchemy import text
 
 workout_bp = Blueprint('workout', __name__, url_prefix='/api/workouts')
 
+<<<<<<< HEAD
 #fetch list of exercises
+=======
+>>>>>>> f122e75901820fab7522ef2d8a6371f68ca575e0
 @workout_bp.route('/exercises', methods=['GET'])
 def get_exercises():
     db = current_app.extensions['sqlalchemy']
@@ -27,7 +30,10 @@ def get_exercises():
         print("DATABASE ERROR:", str(e))
         return jsonify({'status': 'error', 'message': 'Failed to fetch exercises'}), 500
 
+<<<<<<< HEAD
 # get daily workout plan
+=======
+>>>>>>> f122e75901820fab7522ef2d8a6371f68ca575e0
 @workout_bp.route('/daily-plan/<int:user_id>/<DOW>', methods=['GET'])
 def get_daily_plan(user_id, DOW):
     db = current_app.extensions['sqlalchemy']
@@ -36,7 +42,11 @@ def get_daily_plan(user_id, DOW):
     try:
         #Grab all exercises that are available
         query = text("""
+<<<<<<< HEAD
                     select pe.plan_id, pe.plan_exercise_id, pe.exercise_id, e.name, e.equipment_needed, pe.sets, pe.reps, pe.weight, pe.completed from workout_plans wp
+=======
+                    select pe.exercise_id, e.name, e.equipment_needed, pe.sets, pe.reps, pe.weight from workout_plans wp
+>>>>>>> f122e75901820fab7522ef2d8a6371f68ca575e0
                     join plan_exercise pe
                     on wp.plan_id = pe.plan_id
                     join exercises e
@@ -49,6 +59,7 @@ def get_daily_plan(user_id, DOW):
 
         # Convert result to list of dicts
         exercises = [dict(row) for row in result]
+<<<<<<< HEAD
         if len(result) > 0:
             hasPlan = True
         else:
@@ -56,6 +67,10 @@ def get_daily_plan(user_id, DOW):
 
 
         return jsonify({'status': 'success', 'data': exercises, 'hasPlan': hasPlan}), 200
+=======
+
+        return jsonify({'status': 'success', 'data': exercises}), 200
+>>>>>>> f122e75901820fab7522ef2d8a6371f68ca575e0
 
     except Exception as e:
         print("DATABASE ERROR:", str(e))
@@ -228,6 +243,7 @@ def remove_exercise_from_plan(plan_id, exercise_id):
     except Exception as e:
         db.session.rollback()
         print("DATABASE ERROR:", str(e))
+<<<<<<< HEAD
         return jsonify({'status': 'error', 'message': 'Failed to remove exercise'}), 500
 
 # add individual exercise from daily-workout plan
@@ -380,3 +396,6 @@ def complete_workout():
         
     except:
         return jsonify({"message":"Error Removing Exercise"}), 400
+=======
+        return jsonify({'status': 'error', 'message': 'Failed to remove exercise'}), 500
+>>>>>>> f122e75901820fab7522ef2d8a6371f68ca575e0

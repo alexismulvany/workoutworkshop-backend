@@ -475,9 +475,22 @@ def register():
                 }
             )
 
+        # 8. Create a default "Welcome" message so the Admin appears in their chat history
+        session.execute(
+            text("""
+                INSERT INTO message (sender_id, receiver_id, content)
+                VALUES (:admin_id, :user_id, :text)
+            """),
+            {
+                'admin_id': 2,  # Assuming 1 is your Admin ID
+                'user_id': user_id,
+                'text': "Welcome to the platform! Use this chat to reach out for support or receive announcements."
+            }
+        )
+
         session.commit()
 
-        # 8. Issue JWT
+        # 9. Issue JWT
         token = issue_auth_token(
             user_id=user_id,
             username=username,

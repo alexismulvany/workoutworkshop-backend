@@ -2,8 +2,229 @@ from datetime import date
 import jwt
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import text
+import os
+from werkzeug.utils import secure_filename
 
-user_bp = Blueprint('user_bp', __name__)
+user_bp = Blueprint('user_bp', __name__, url_prefix='/user')
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+UPLOAD_FOLDER = 'static/profiles'
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@user_bp.route('/upload-profile-picture', methods=['POST'])
+def upload_profile_picture():
+
+    #verify user token
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({'status': 'error', 'message': 'Missing or invalid authorization header'}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user_id = payload['sub']
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Invalid or expired token'}), 401
+
+    #
+    if 'profile_image' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No file part found in request'}), 400
+
+    file = request.files['profile_image']
+    if file.filename == '':
+        return jsonify({'status': 'error', 'message': 'No selected file'}), 400
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(f"user_{user_id}_{file.filename}")
+
+        # Ensure the static/profiles directory exists
+        save_dir = os.path.join(current_app.root_path, UPLOAD_FOLDER)
+        os.makedirs(save_dir, exist_ok=True)
+
+        # Saves the file to your computer/server
+        filepath = os.path.join(save_dir, filename)
+        file.save(filepath)
+
+        file_url = f"http://127.0.0.1:5000/static/profiles/{filename}"
+
+        db = current_app.extensions['sqlalchemy']
+        try:
+            db.session.execute(
+                text('UPDATE User_Profiles SET profile_picture_url = :url WHERE user_id = :uid'),
+                {'url': file_url, 'uid': user_id}
+            )
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'status': 'error', 'message': 'Database error', 'detail': str(e)}), 500
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Profile picture updated',
+            'profile_picture_url': file_url
+        }), 200
+
+    return jsonify({'status': 'error', 'message': 'Invalid file format. Only JPG and PNG are allowed.'}), 400
+
+
+@user_bp.route('/update-username', methods=['PUT'])
+def update_username():
+    # verify user token
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user_id = payload['sub']
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
+
+    #get new username from request body
+    data = request.get_json()
+    new_username = data.get('new_username')
+
+    if not new_username:
+        return jsonify({'status': 'error', 'message': 'Username is required'}), 400
+
+    db = current_app.extensions['sqlalchemy']
+
+    try:
+        # Check if username already exists
+        existing_user = db.session.execute(
+            text('SELECT user_id FROM User_login WHERE username = :uname AND user_id != :uid'),
+            {'uname': new_username, 'uid': user_id}
+        ).fetchone()
+
+        if existing_user:
+            return jsonify(
+                {'status': 'error', 'message': 'That username is already taken. Please choose another.'}), 409
+
+        db.session.execute(
+            text('UPDATE User_login SET username = :uname WHERE user_id = :uid'),
+            {'uname': new_username, 'uid': user_id}
+        )
+        db.session.commit()
+
+        return jsonify({'status': 'success', 'message': 'Username updated successfully'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print("DATABASE ERROR:", str(e))  # Helps catch any future issues!
+        return jsonify({'status': 'error', 'message': 'Database error', 'detail': str(e)}), 500
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Database error', 'detail': str(e)}), 500
+
+
+@user_bp.route('/update-goals', methods=['PUT'])
+def update_goals():
+    # verify user token
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user_id = payload['sub']
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
+
+    data = request.get_json()
+    current_weight = data.get('current_weight')
+    goal_weight = data.get('goal_weight')
+    goal_type = data.get('goal_type')
+    information = data.get('information')
+
+    try:
+        current_weight = float(current_weight)
+        goal_weight = float(goal_weight)
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'Weights must be valid numbers'}), 400
+
+    db = current_app.extensions['sqlalchemy']
+
+    try:
+        db.session.execute(
+            text('UPDATE User_Profiles SET current_weight = :cw WHERE user_id = :uid'),
+            {'cw': current_weight, 'uid': user_id}
+        )
+
+        #Update goals if they exist for this user; otherwise insert a new row for this user in the goals table.
+        goal_exists = db.session.execute(
+            text('SELECT 1 FROM goals WHERE user_id = :uid'),
+            {'uid': user_id}
+        ).fetchone()
+
+        if goal_exists:
+            db.session.execute(
+                text('''
+                     UPDATE goals
+                     SET goal_weight = :gw,
+                         goal_type   = :gt,
+                         information = :info
+                     WHERE user_id = :uid
+                     '''),
+                {'gw': goal_weight, 'gt': goal_type, 'info': information, 'uid': user_id}
+            )
+        else:
+            db.session.execute(
+                text('''
+                     INSERT INTO goals (user_id, goal_weight, goal_type, information)
+                     VALUES (:uid, :gw, :gt, :info)
+                     '''),
+                {'uid': user_id, 'gw': goal_weight, 'gt': goal_type, 'info': information}
+            )
+
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': 'Goals updated successfully'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print("DATABASE ERROR:", str(e))
+        return jsonify({'status': 'error', 'message': 'Database error', 'detail': str(e)}), 500
+
+
+@user_bp.route('/delete-account', methods=['DELETE'])
+def delete_account():
+    # Verify User token
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user_id = payload['sub']
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
+
+    db = current_app.extensions['sqlalchemy']
+
+    try:
+        # Delete from child tables
+        db.session.execute(text('DELETE FROM goals WHERE user_id = :uid'), {'uid': user_id})
+        db.session.execute(text('DELETE FROM User_Profiles WHERE user_id = :uid'), {'uid': user_id})
+
+        #Delete from parent table
+        db.session.execute(text('DELETE FROM User_login WHERE user_id = :uid'), {'uid': user_id})
+
+        db.session.commit()
+
+        return jsonify({'status': 'success', 'message': 'Account deleted successfully'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print("DATABASE ERROR ON DELETE:", str(e))
+        return jsonify({'status': 'error', 'message': 'Database error', 'detail': str(e)}), 500
+
 
 def _decode_user_id_from_token() -> tuple[int | None, str | None]:
     token = request.headers.get('Authorization')
@@ -28,7 +249,7 @@ def _decode_user_id_from_token() -> tuple[int | None, str | None]:
         return None, 'Invalid token subject.'
 
 
-@user_bp.route('/user/check-survey', methods=['GET'])
+@user_bp.route('/check-survey', methods=['GET'])
 def check_survey():
     user_id, auth_error = _decode_user_id_from_token()
     if auth_error:
@@ -79,7 +300,7 @@ def check_survey():
         'rating': row.get('rating') if row else None
     }), 200
 
-@user_bp.route('/user/daily-survey', methods=['POST'])
+@user_bp.route('/daily-survey', methods=['POST'])
 def save_daily_survey():
     user_id, auth_error = _decode_user_id_from_token()
     if auth_error:
@@ -142,12 +363,13 @@ def save_daily_survey():
         if update_result.rowcount == 0:
             session.execute(
                 text(
-                    'INSERT INTO Daily_Survey (user_id, result) '
-                    'VALUES (:uid, :result)'
+                    'INSERT INTO Daily_Survey (user_id, result, date) '
+                    'VALUES (:uid, :result, :survey_date)'
                 ),
                 {
                     'uid': user_id,
                     'result': rating_value,
+                    'survey_date': target_date_start
                 }
             )
             created = True
@@ -168,6 +390,7 @@ def save_daily_survey():
         'created': created
     }), 200
 
+<<<<<<< HEAD
 # check if user has coach, if yes get coach's id for future use
 @user_bp.route('/user/has-coach/<int:user_id>', methods=['GET'])
 def user_has_coach(user_id):
@@ -197,3 +420,103 @@ def user_has_coach(user_id):
             "message": str(e)
         }), 500
 
+=======
+@user_bp.route('/update-payment', methods=['PATCH'])
+def changePayment():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+
+    token = auth_header.split(' ', 1)[1].strip() if auth_header.startswith('Bearer ') else auth_header.strip()
+    try:
+        payload = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user_id = int(payload.get('sub'))
+    except Exception:
+        return jsonify({'status': 'error', 'message': 'Invalid or expired token'}), 401
+
+    data = request.get_json(silent=True) or {}
+    card_num = data.get('card_number')
+    card_month = data.get('card_month')
+    card_year = data.get('card_year')
+    card_cvv = data.get('card_cvv')
+
+    if not all([card_num, card_month, card_year, card_cvv]):
+        return jsonify({
+            'status': 'error',
+            'message': 'card_number, card_month, card_year, and card_cvv are required.'
+        }), 400
+
+    db = current_app.extensions['sqlalchemy']
+
+    try:
+        existing_payment = db.session.execute(
+            text('SELECT user_id FROM payment_details WHERE user_id = :uid LIMIT 1'),
+            {'uid': user_id}
+        ).mappings().first()
+
+        if existing_payment:
+            db.session.execute(
+                text(
+                    'UPDATE payment_details '
+                    'SET card_num = :number, exp_month = :exp_month, exp_year = :exp_year, CVV = :cvc '
+                    'WHERE user_id = :uid'
+                ),
+                {
+                    'uid': user_id,
+                    'number': card_num,
+                    'exp_month': card_month,
+                    'exp_year': card_year,
+                    'cvc': card_cvv
+                }
+            )
+            action = 'updated'
+        else:
+            db.session.execute(
+                text(
+                    'INSERT INTO payment_details '
+                    '(user_id, card_num, exp_month, exp_year, CVV) '
+                    'VALUES (:uid, :number, :exp_month, :exp_year, :cvc)'
+                ),
+                {
+                    'uid': user_id,
+                    'number': card_num,
+                    'exp_month': card_month,
+                    'exp_year': card_year,
+                    'cvc': card_cvv
+                }
+            )
+            action = 'created'
+
+        db.session.commit()
+        return jsonify({
+            'status': 'success',
+            'message': f'Payment details {action} successfully.',
+            'payment': {
+                'card_number': card_num,
+                'card_month': card_month,
+                'card_year': card_year
+            }
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to update payment details.',
+            'detail': str(e)
+        }), 500
+
+@user_bp.route('/chat/history/<int:me>/<int:other>', methods=['GET'])
+def get_chat_history(me, other):
+    db = current_app.extensions['sqlalchemy']
+    query = text("""
+        SELECT sender_id, content, created_at 
+        FROM message 
+        WHERE (sender_id = :me AND receiver_id = :other)
+           OR (sender_id = :other AND receiver_id = :me)
+        ORDER BY created_at ASC
+    """)
+    result = db.session.execute(query, {"me": me, "other": other}).fetchall()
+
+    messages = [{"sender_id": r.sender_id, "text": r.message_text} for r in result]
+    return jsonify(messages)
+>>>>>>> f122e75901820fab7522ef2d8a6371f68ca575e0

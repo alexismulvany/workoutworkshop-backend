@@ -8,12 +8,15 @@ from routes.user_routes import user_bp
 from routes.workout_routes import workout_bp
 from dotenv import load_dotenv
 import os
+from routes.chat import register_chat_events
 from sqlalchemy import text
+from flask_socketio import SocketIO
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # DB Config
 db_user = os.getenv('DB_USER')
@@ -31,6 +34,11 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(coach_bp)
 app.register_blueprint(user_bp)
 app.register_blueprint(workout_bp)
+<<<<<<< HEAD
+=======
+
+register_chat_events(socketio, app)
+>>>>>>> f122e75901820fab7522ef2d8a6371f68ca575e0
 
 @app.route('/test-db')
 def test_db():
@@ -49,4 +57,4 @@ def test_db():
         }), 500
     
 if __name__ == '__main__':
-    app.run(debug=True, port=5000, host='localhost')
+    socketio.run(app, debug=True, port=5000, host='localhost')
