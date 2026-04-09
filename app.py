@@ -34,11 +34,8 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(coach_bp)
 app.register_blueprint(user_bp)
 app.register_blueprint(workout_bp)
-<<<<<<< HEAD
-=======
 
 register_chat_events(socketio, app)
->>>>>>> f122e75901820fab7522ef2d8a6371f68ca575e0
 
 @app.route('/test-db')
 def test_db():
