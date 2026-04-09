@@ -24,6 +24,28 @@ def get_coach_data():
             "message": str(e)
         }), 500
 
+@coach_bp.route('/coach-data/<int:coach_id>', methods=['GET'])
+def get_single_coach_data(coach_id):
+    db = current_app.extensions['sqlalchemy']
+    try:
+        # Main Query to get coach data
+        query = """SELECT c_p.coach_id, u_p.user_id, u_p.first_name, u_p.last_name, c_p.bio, c_p.is_nutritionist, c_p.is_active, c_p.pricing, u_p.profile_picture_url, AVG(c_r.rating) as rating FROM coach_profiles as c_p
+        JOIN user_profiles AS u_p ON c_p.user_ID = u_p.user_id
+		left JOIN coach_reviews AS c_r ON c_p.coach_id = c_r.coach_id 
+        WHERE c_p.coach_id = :coach_id
+        GROUP BY c_p.coach_id"""
+        coach= db.session.execute(db.text(query), {"coach_id":coach_id}).fetchall()
+        coachData = [{"Coach ID": c[0], "User ID": c[1], "Name": c[2]+' '+c[3],  "bio": c[4], "is_nutritionist": c[5], "is_active": c[6], "pricing": c[7], "URL": c[8], "rating": c[9]} for c in coach]
+        return jsonify({
+            "status": "success",
+            "data": coachData
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
 #get the reviews of a coach
 @coach_bp.route('/coach-reviews/<int:coach_id>', methods=['GET'])
 def get_coach_reviews(coach_id):

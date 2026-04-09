@@ -405,6 +405,12 @@ def register():
             }
         )
 
+        #log users starting weight
+        session.execute(
+            text("""INSERT INTO weight_logs (user_id, weight) values (:uid, :cw)"""),
+            {'uid': user_id, 'cw': current_weight}
+        )
+
         #insert goals
         session.execute(
             text(

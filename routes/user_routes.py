@@ -153,8 +153,14 @@ def update_goals():
 
     try:
         db.session.execute(
-            text('UPDATE User_Profiles SET current_weight = :cw WHERE user_id = :uid'),
+            text("""UPDATE User_Profiles SET current_weight = :cw WHERE user_id = :uid"""),
             {'cw': current_weight, 'uid': user_id}
+        )
+
+        #log users change in weight for progress metrics
+        db.session.execute(
+            text('INSERT into weight_logs (user_id, weight) values (:uid, :cw)'),
+            {'uid': user_id, 'cw': current_weight}
         )
 
         #Update goals if they exist for this user; otherwise insert a new row for this user in the goals table.
@@ -390,20 +396,18 @@ def save_daily_survey():
         'created': created
     }), 200
 
-<<<<<<< HEAD
 # check if user has coach, if yes get coach's id for future use
-@user_bp.route('/user/has-coach/<int:user_id>', methods=['GET'])
+@user_bp.route('/has-coach/<int:user_id>', methods=['GET'])
 def user_has_coach(user_id):
     db = current_app.extensions['sqlalchemy']
     try:
         # Main Query to get a single coach data
         query = """SELECT coach_id, user_id FROM coach_subscriptions
                     WHERE user_id = :user_id"""
-        review = db.session.execute(db.text(query), {"user_id": user_id}).fetchall()
-
-        if len(review) > 0:
+        result = db.session.execute(db.text(query), {"user_id": user_id}).mappings().fetchall()
+        if len(result) > 0:
             hasCoach = True
-            coach_id = query[0]["coach_id"]
+            coach_id = result[0]["coach_id"]
         else:
             hasCoach = False
             coach_id = None
@@ -420,7 +424,6 @@ def user_has_coach(user_id):
             "message": str(e)
         }), 500
 
-=======
 @user_bp.route('/update-payment', methods=['PATCH'])
 def changePayment():
     auth_header = request.headers.get('Authorization')
@@ -519,4 +522,16 @@ def get_chat_history(me, other):
 
     messages = [{"sender_id": r.sender_id, "text": r.message_text} for r in result]
     return jsonify(messages)
->>>>>>> f122e75901820fab7522ef2d8a6371f68ca575e0
+
+@user_bp.route('/weight-log/<int:user_id>', methods=['GET'])
+def get_weight_logs(user_id):
+    db = current_app.extensions['sqlalchemy']
+    query = text("""
+        SELECT weight, log_date FROM weight_logs
+        WHERE user_id = :user_id
+    """)
+
+    result = db.session.execute(query, {'user_id': user_id}).mappings().fetchall()
+
+    logs = [dict(row) for row in result]
+    return jsonify({'status': 'success', 'data': logs}), 200
