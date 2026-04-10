@@ -153,8 +153,14 @@ def update_goals():
 
     try:
         db.session.execute(
-            text('UPDATE User_Profiles SET current_weight = :cw WHERE user_id = :uid'),
+            text("""UPDATE User_Profiles SET current_weight = :cw WHERE user_id = :uid"""),
             {'cw': current_weight, 'uid': user_id}
+        )
+
+        #log users change in weight for progress metrics
+        db.session.execute(
+            text('INSERT into weight_logs (user_id, weight) values (:uid, :cw)'),
+            {'uid': user_id, 'cw': current_weight}
         )
 
         #Update goals if they exist for this user; otherwise insert a new row for this user in the goals table.
@@ -363,12 +369,13 @@ def save_daily_survey():
         if update_result.rowcount == 0:
             session.execute(
                 text(
-                    'INSERT INTO Daily_Survey (user_id, result) '
-                    'VALUES (:uid, :result)'
+                    'INSERT INTO Daily_Survey (user_id, result, date) '
+                    'VALUES (:uid, :result, :survey_date)'
                 ),
                 {
                     'uid': user_id,
                     'result': rating_value,
+                    'survey_date': target_date_start
                 }
             )
             created = True
@@ -389,4 +396,142 @@ def save_daily_survey():
         'created': created
     }), 200
 
+# check if user has coach, if yes get coach's id for future use
+@user_bp.route('/has-coach/<int:user_id>', methods=['GET'])
+def user_has_coach(user_id):
+    db = current_app.extensions['sqlalchemy']
+    try:
+        # Main Query to get a single coach data
+        query = """SELECT coach_id, user_id FROM coach_subscriptions
+                    WHERE user_id = :user_id"""
+        result = db.session.execute(db.text(query), {"user_id": user_id}).mappings().fetchall()
+        if len(result) > 0:
+            hasCoach = True
+            coach_id = result[0]["coach_id"]
+        else:
+            hasCoach = False
+            coach_id = None
 
+        return jsonify({
+            "status":"success",
+            "hasCoach":hasCoach,
+            "coach_id":coach_id
+        })
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@user_bp.route('/update-payment', methods=['PATCH'])
+def changePayment():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+
+    token = auth_header.split(' ', 1)[1].strip() if auth_header.startswith('Bearer ') else auth_header.strip()
+    try:
+        payload = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user_id = int(payload.get('sub'))
+    except Exception:
+        return jsonify({'status': 'error', 'message': 'Invalid or expired token'}), 401
+
+    data = request.get_json(silent=True) or {}
+    card_num = data.get('card_number')
+    card_month = data.get('card_month')
+    card_year = data.get('card_year')
+    card_cvv = data.get('card_cvv')
+
+    if not all([card_num, card_month, card_year, card_cvv]):
+        return jsonify({
+            'status': 'error',
+            'message': 'card_number, card_month, card_year, and card_cvv are required.'
+        }), 400
+
+    db = current_app.extensions['sqlalchemy']
+
+    try:
+        existing_payment = db.session.execute(
+            text('SELECT user_id FROM payment_details WHERE user_id = :uid LIMIT 1'),
+            {'uid': user_id}
+        ).mappings().first()
+
+        if existing_payment:
+            db.session.execute(
+                text(
+                    'UPDATE payment_details '
+                    'SET card_num = :number, exp_month = :exp_month, exp_year = :exp_year, CVV = :cvc '
+                    'WHERE user_id = :uid'
+                ),
+                {
+                    'uid': user_id,
+                    'number': card_num,
+                    'exp_month': card_month,
+                    'exp_year': card_year,
+                    'cvc': card_cvv
+                }
+            )
+            action = 'updated'
+        else:
+            db.session.execute(
+                text(
+                    'INSERT INTO payment_details '
+                    '(user_id, card_num, exp_month, exp_year, CVV) '
+                    'VALUES (:uid, :number, :exp_month, :exp_year, :cvc)'
+                ),
+                {
+                    'uid': user_id,
+                    'number': card_num,
+                    'exp_month': card_month,
+                    'exp_year': card_year,
+                    'cvc': card_cvv
+                }
+            )
+            action = 'created'
+
+        db.session.commit()
+        return jsonify({
+            'status': 'success',
+            'message': f'Payment details {action} successfully.',
+            'payment': {
+                'card_number': card_num,
+                'card_month': card_month,
+                'card_year': card_year
+            }
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to update payment details.',
+            'detail': str(e)
+        }), 500
+
+@user_bp.route('/chat/history/<int:me>/<int:other>', methods=['GET'])
+def get_chat_history(me, other):
+    db = current_app.extensions['sqlalchemy']
+    query = text("""
+        SELECT sender_id, content, created_at 
+        FROM message 
+        WHERE (sender_id = :me AND receiver_id = :other)
+           OR (sender_id = :other AND receiver_id = :me)
+        ORDER BY created_at ASC
+    """)
+    result = db.session.execute(query, {"me": me, "other": other}).fetchall()
+
+    messages = [{"sender_id": r.sender_id, "text": r.message_text} for r in result]
+    return jsonify(messages)
+
+@user_bp.route('/weight-log/<int:user_id>', methods=['GET'])
+def get_weight_logs(user_id):
+    db = current_app.extensions['sqlalchemy']
+    query = text("""
+        SELECT weight, log_date FROM weight_logs
+        WHERE user_id = :user_id
+    """)
+
+    result = db.session.execute(query, {'user_id': user_id}).mappings().fetchall()
+
+    logs = [dict(row) for row in result]
+    return jsonify({'status': 'success', 'data': logs}), 200
