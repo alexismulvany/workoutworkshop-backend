@@ -4,7 +4,12 @@ from sqlalchemy import text
 
 admin_bp = Blueprint('admin_bp', __name__)
 
-MUSCLE_GROUPS = ['Chest', 'Legs', 'Bicep', 'Tricep', 'Shoulders', 'Back', 'Cardio', 'Abs']
+MUSCLE_GROUPS = [
+    'Arms', 'Legs', 'Chest', 'Back', 'Cardio', 'Core',
+    'Bicep', 'Tricep', 'Shoulders', 'Forearms', 'Abs',
+    'Lats', 'Traps', 'Lower Back', 'Glutes', 'Hamstrings',
+    'Quads', 'Calves'
+]
 EQUIPMENTS = ['Machine', 'Free Weight', 'Body Weight']
 
 @admin_bp.route('/admin/test', methods=['GET'])
@@ -485,7 +490,7 @@ def exercises(): # Search by Name or Shows the Default List
     if search and search.strip() != "":
         
         query_search = """
-                       SELECT exercise_id, name, muscle_group, equipment_needed, video_url
+                       SELECT exercise_id, name, muscle_group, equipment_needed, video_url, thumbnail
                        FROM exercises
                        WHERE is_removed = FALSE
                        AND LOWER(name) LIKE :search
@@ -501,7 +506,8 @@ def exercises(): # Search by Name or Shows the Default List
                 "name": row.name,
                 "muscle_group": row.muscle_group,
                 "equipment": row.equipment_needed,
-                "video_url": row.video_url
+                "video_url": row.video_url,
+                "thumbnail": row.thumbnail
             })
         
         return jsonify({
@@ -511,7 +517,7 @@ def exercises(): # Search by Name or Shows the Default List
         })
     
     query_default = """
-                    SELECT exercise_id, name, muscle_group, equipment_needed, video_url
+                    SELECT exercise_id, name, muscle_group, equipment_needed, video_url, thumbnail
                     FROM exercises
                     WHERE is_removed = FALSE
                     """
@@ -533,7 +539,8 @@ def exercises(): # Search by Name or Shows the Default List
             "name": row.name,
             "muscle_group": row.muscle_group,
             "equipment": row.equipment_needed,
-            "video_url": row.video_url
+            "video_url": row.video_url,
+            "thumbnail": row.thumbnail
         }
         
         if row.muscle_group in ["Bicep", "Tricep", "Shoulders","Forearms",]:
@@ -562,6 +569,7 @@ def exercise_add(): # Updated for Exercise Added
     muscle_group = data.get("muscle_group")
     equipment = data.get("equipment_needed")
     video_url = data.get("video_url")
+    thumb_url = data.get("thumb_url")
     
     if not all([admin_id, name, muscle_group, equipment]):
         return jsonify({"error": "admin_id, name, muscle_group, and equipment are required"}), 400
@@ -574,11 +582,11 @@ def exercise_add(): # Updated for Exercise Added
     
     try:
         query_exercise = """
-                         INSERT INTO exercises (name, muscle_group, equipment_needed, video_url)
-                         VALUES (:name, :muscle_group, :equipment, :video_url)
+                         INSERT INTO exercises (name, muscle_group, equipment_needed, video_url, thumbnail)
+                         VALUES (:name, :muscle_group, :equipment, :video_url, :thumb_url)
                          """
         
-        result = db.session.execute(db.text(query_exercise), {"name": name, "muscle_group": muscle_group, "equipment": equipment, "video_url": video_url})
+        result = db.session.execute(db.text(query_exercise), {"name": name, "muscle_group": muscle_group, "equipment": equipment, "video_url": video_url, "thumb_url": thumb_url})
         exercise_id = result.lastrowid
         
         query_change = """
@@ -640,6 +648,7 @@ def exercise_edit(exercise_id): # Updated for Exercise Edited
     muscle_group = data.get("muscle_group")
     equipment = data.get("equipment_needed")
     video_url = data.get("video_url")
+    thumb_url = data.get("thumb_url")
     
     if not all([admin_id, name, muscle_group, equipment]):
         return jsonify({"error": "admin_id, name, muscle_group, and equipment are required"}), 400
@@ -653,11 +662,11 @@ def exercise_edit(exercise_id): # Updated for Exercise Edited
     try:
         query_exercise = """
                          UPDATE exercises
-                         SET name = :name, muscle_group = :muscle_group, equipment_needed = :equipment_needed, video_url = :video_url
+                         SET name = :name, muscle_group = :muscle_group, equipment_needed = :equipment_needed, video_url = :video_url, thumbnail = :thumb_url
                          WHERE exercise_id = :exercise_id
                          """
         
-        db.session.execute(db.text(query_exercise), {"exercise_id": exercise_id, "name": name, "muscle_group": muscle_group, "equipment_needed": equipment, "video_url": video_url})
+        db.session.execute(db.text(query_exercise), {"exercise_id": exercise_id, "name": name, "muscle_group": muscle_group, "equipment_needed": equipment, "video_url": video_url, "thumb_url": thumb_url})
         
         query_change = """
                        INSERT INTO exercise_changes (admin_id, exercise_id, event)
@@ -764,3 +773,39 @@ def fetch_users():
         'currentPage': page,
         'totalUsers': total_users
     }), 200
+
+@admin_bp.route('/admin/platform-metrics', methods=['GET'])
+def platform_metrics():
+    db = current_app.extensions['sqlalchemy']
+
+    try:
+        metrics_sql = text(
+            'SELECT '
+            '(SELECT COUNT(*) FROM Users) AS total_users, '
+            '(SELECT COUNT(*) FROM coach_subscriptions) AS total_subscriptions, '
+            'COALESCE(( '
+            '  SELECT SUM(cp.pricing) '
+            '  FROM coach_subscriptions cs '
+            '  JOIN coach_profiles cp ON cp.coach_id = cs.coach_id '
+            '  JOIN Users u ON u.user_id = cs.user_id '
+            "  WHERE u.role = 'U' "
+            '), 0) AS total_revenue'
+        )
+
+        row = db.session.execute(metrics_sql).mappings().first() or {}
+
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'total_users': int(row.get('total_users') or 0),
+                'total_subscriptions': int(row.get('total_subscriptions') or 0),
+                'total_revenue': float(row.get('total_revenue') or 0)
+            }
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to fetch platform metrics.',
+            'detail': str(e)
+        }), 500
