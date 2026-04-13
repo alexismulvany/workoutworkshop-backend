@@ -4,16 +4,19 @@ from sqlalchemy import text
 
 admin_bp = Blueprint('admin_bp', __name__)
 
-MUSCLE_GROUPS = ['Chest', 'Legs', 'Bicep', 'Tricep', 'Shoulders', 'Back', 'Cardio', 'Abs']
+MUSCLE_GROUPS = ['Back', 'Arms', 'Legs', 'Chest', 'Core', 'Cardio']
 EQUIPMENTS = ['Machine', 'Free Weight', 'Body Weight']
 
 @admin_bp.route('/admin/test', methods=['GET'])
 def admin_test():
     """
-    Checks that the routes to admin are alright.
+    Checks to see if the admin routes are alright
     ---
     tags:
-        - Test
+        - Admin - Test
+    responses:
+        200:
+            description: Routes to admin are alright
     """
     return jsonify({"message": "Routes to Admin are fine!"})
 
@@ -21,6 +24,25 @@ def admin_test():
 
 @admin_bp.route('/admin/coach-applications', methods=['GET'])
 def coach_applications(): # Get the information on Coach Applications
+    """
+    Get the list of coach applications
+    ---
+    tags:
+        - Admin - Coach Applications
+    parameters:
+        - name: page
+          in: query
+          type: integer
+        - name: limit
+          in: query
+          type: integer
+        - name: search
+          in: query
+          type: string
+    responses:
+        200:
+            description: List of "pending" coach applications
+    """
     db = current_app.extensions['sqlalchemy']
 
     try:
@@ -98,17 +120,20 @@ def coach_applications(): # Get the information on Coach Applications
 @admin_bp.route('/admin/coach-applications/<int:coach_id>', methods=['GET'])
 def coach_application_details(coach_id): # Get the information for one Coach Application
     """
-    Checks if one coach application is received.
+    Get the details from one coach application
     ---
     tags:
-        - Admin
+        - Admin - Coach Applications
     parameters:
         - name: coach_id
-          type: integer
           in: path
+          type: integer
+          required: true
     responses:
         200:
-            description: Success
+            description: Opens the coach application details
+        404:
+            description: The coach can't be found
     """
     db = current_app.extensions['sqlalchemy']
     
@@ -177,6 +202,30 @@ def coach_application_details(coach_id): # Get the information for one Coach App
 
 @admin_bp.route('/admin/coach-applications/<int:certification_id>/approve', methods=['PUT'])
 def approve_certification(certification_id): # Update the Certification as Approved
+    """
+    Choosing to approve the coach certification
+    ---
+    tags:
+        - Admin - Coach Applications
+    parameters:
+        - name: certification_id
+          in: path
+          type: integer
+          required: true
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+                - admin_id
+            properties:
+              admin_id:
+                type: integer
+    responses:
+        200:
+            description: The coach certification is now approved
+    """
     db = current_app.extensions['sqlalchemy']
     data = request.get_json()
     admin_id = data.get("admin_id")
@@ -208,6 +257,30 @@ def approve_certification(certification_id): # Update the Certification as Appro
 
 @admin_bp.route('/admin/coach-applications/<int:certification_id>/reject', methods=['PUT'])
 def reject_certification(certification_id): # Update the Certification as Rejected
+    """
+    Choosing to reject the coach certification
+    ---
+    tags:
+        - Admin - Coach Applications
+    parameters:
+        - name: certification_id
+          in: path
+          type: integer
+          required: true
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+                - admin_id
+            properties:
+              admin_id:
+                type: integer
+    responses:
+        200:
+            description: The coach certification is now rejected
+    """
     db = current_app.extensions['sqlalchemy']
     data = request.get_json()
     admin_id = data.get("admin_id")
@@ -241,6 +314,25 @@ def reject_certification(certification_id): # Update the Certification as Reject
 
 @admin_bp.route('/admin/coach-reports', methods=['GET'])
 def coach_reports(): # Get the information on Coach Reports
+    """
+    Get the list of coach reports
+    ---
+    tags:
+        - Admin - Coach Reports
+    parameters:
+        - name: page
+          in: query
+          type: integer
+        - name: limit
+          in: query
+          type: integer
+        - name: search
+          in: query
+          type: string
+    responses:
+        200:
+            description: List of "pending" coach reports
+    """
     db = current_app.extensions['sqlalchemy']
 
     try:
@@ -319,6 +411,22 @@ def coach_reports(): # Get the information on Coach Reports
 
 @admin_bp.route('/admin/coach-reports/<int:report_id>', methods=['GET'])
 def coach_report_details(report_id): # Get the information for one Coach Report
+    """
+    Get the details from one coach report
+    ---
+    tags:
+        - Admin - Coach Reports
+    parameters:
+        - name: report_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Opens the coach report details
+        404:
+            description: The coach report can't be found
+    """
     db = current_app.extensions['sqlalchemy']
     
     try:
@@ -359,6 +467,20 @@ def coach_report_details(report_id): # Get the information for one Coach Report
 
 @admin_bp.route('/admin/coach-reports/<int:report_id>/dismiss', methods=['PUT'])
 def dismiss_report(report_id): # Update for Dismissed Report
+    """
+    Choosing to dismiss the coach report
+    ---
+    tags:
+        - Admin - Coach Reports
+    parameters:
+        - name: report_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: The coach report is now dismissed
+    """
     db = current_app.extensions['sqlalchemy']
     
     try:
@@ -381,6 +503,35 @@ def dismiss_report(report_id): # Update for Dismissed Report
 
 @admin_bp.route('/admin/coach-reports/<int:report_id>/ban', methods=['PUT'])
 def coach_ban(report_id): # Update for Coach Banned
+    """
+    Choosing to ban a coach based on the coach report
+    ---
+    tags:
+        - Admin - Coach Reports
+    parameters:
+        - name: report_id
+          in: path
+          type: integer
+          required: true
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - user_id
+              - reason
+            properties:
+              user_id:
+                type: integer
+              reason:
+                type: string
+    responses:
+        200:
+            description: The coach is now banned
+        400:
+            description: There are missing required fields
+    """
     db = current_app.extensions['sqlalchemy']
     data = request.get_json()
     admin_id = data.get("user_id")
@@ -438,6 +589,42 @@ def coach_ban(report_id): # Update for Coach Banned
 
 @admin_bp.route('/admin/coach-reports/<int:report_id>/disable', methods=['PUT'])
 def coach_disable(report_id): # Update for Coach Disabled
+    """
+    Choosing to disable a coach based on the coach report
+    ---
+    tags:
+        - Admin - Coach Reports
+    parameters:
+        - name: report_id
+          in: path
+          type: integer
+          required: true
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - user_id
+              - reason
+              - day
+              - month
+              - year
+            properties:
+              user_id:
+                type: integer
+              reason:
+                type: string
+              day:
+                type: integer
+              month:
+                type: integer
+              year:
+                type: integer
+    responses:
+        200:
+            description: The coach is now disabled
+    """
     db = current_app.extensions['sqlalchemy']
     data = request.get_json()
     admin_id = data.get("user_id")
@@ -498,6 +685,19 @@ def coach_disable(report_id): # Update for Coach Disabled
 
 @admin_bp.route('/admin/exercises', methods=['GET'])
 def exercises(): # Search by Name or Shows the Default List
+    """
+    Get the list of exercises
+    ---
+    tags:
+        - Admin - Exercises
+    parameters:
+        - name: search
+          in: query
+          type: string
+    responses:
+        200:
+            description: List of exercises
+    """
     db = current_app.extensions['sqlalchemy']
     search = request.args.get('search')
     
@@ -555,13 +755,13 @@ def exercises(): # Search by Name or Shows the Default List
             "video_url": row.video_url
         }
         
-        if row.muscle_group in ["Bicep", "Tricep", "Shoulders","Forearms",]:
+        if row.muscle_group in ["Bicep", "Tricep", "Shoulders", "Forearms",]:
             grouped["Arms"].append(exercise)
         elif row.muscle_group == "Abs":
             grouped["Core"].append(exercise)
-        elif row.muscle_group in ["Back","Lats","Traps","Lower Back"]:
+        elif row.muscle_group in ["Lats", "Traps", "Lower Back"]:
             grouped["Back"].append(exercise)
-        elif row.muscle_group in ["Legs","Glutes","Hamstrings","Quads","Calves"]:
+        elif row.muscle_group in ["Glutes", "Hamstrings", "Quads", "Calves"]:
             grouped["Legs"].append(exercise)
         elif row.muscle_group in grouped:
             grouped[row.muscle_group].append(exercise)
@@ -574,6 +774,39 @@ def exercises(): # Search by Name or Shows the Default List
 
 @admin_bp.route('/admin/exercises/add', methods=['POST'])
 def exercise_add(): # Updated for Exercise Added
+    """
+    Choosing to add a new exercise
+    ---
+    tags:
+        - Admin - Exercises
+    parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - user_id
+              - name
+              - muscle_group
+              - equipment_needed
+            properties:
+              user_id:
+                type: integer
+              name:
+                type: string
+              muscle_group:
+                type: string
+              equipment_needed:
+                type: string
+              video_url:
+                type: string
+    responses:
+        200:
+            description: The exercise is now added
+        400:
+            description: There is an invalid input
+    """
     db = current_app.extensions['sqlalchemy']
     data = request.get_json()
     admin_id = data.get("user_id")
@@ -620,6 +853,27 @@ def exercise_add(): # Updated for Exercise Added
 
 @admin_bp.route('/admin/exercises/remove/<int:exercise_id>', methods=['DELETE'])
 def exercise_remove(exercise_id): # Updated for Exercise Removed
+    """
+    Choosing to remove an exercise (soft delete)
+    ---
+    tags:
+        - Admin - Exercises
+    parameters:
+        - name: exercise_id
+          in: path
+          type: integer
+          required: true
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+              user_id:
+                type: integer
+    responses:
+        200:
+            description: The exercise is now removed
+    """
     db = current_app.extensions['sqlalchemy']
     data = request.get_json()
     admin_id = data.get("user_id")
@@ -652,6 +906,41 @@ def exercise_remove(exercise_id): # Updated for Exercise Removed
 
 @admin_bp.route('/admin/exercises/update/<int:exercise_id>', methods=['PUT'])
 def exercise_edit(exercise_id): # Updated for Exercise Edited
+    """
+    Choosing to edit an exercise
+    ---
+    tags:
+        - Admin - Exercises
+    parameters:
+        - name: exercise_id
+          in: path
+          type: integer
+          required: true
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - user_id
+              - name
+              - muscle_group
+              - equipment_needed
+            properties:
+              user_id:
+                type: integer
+              name:
+                type: string
+              muscle_group:
+                type: string
+              equipment_needed:
+                type: string
+              video_url:
+                type: string
+    responses:
+        200:
+            description: The exercise is now edited
+    """
     db = current_app.extensions['sqlalchemy']
     data = request.get_json()
     admin_id = data.get("user_id")
@@ -699,6 +988,25 @@ def exercise_edit(exercise_id): # Updated for Exercise Edited
 
 @admin_bp.route('/admin/fetch-users', methods=['GET'])
 def fetch_users():
+    """
+    Gets all of the users by pagination and search
+    ---
+    tags:
+        - Admin - Users
+    parameters:
+        - name: page
+          in: query
+          type: integer
+        - name: limit
+          in: query
+          type: integer
+        - name: search
+          in: query
+          type: string
+    responses:
+        200:
+            description: Fetches the list of users
+    """
     db = current_app.extensions['sqlalchemy']
     
     try:

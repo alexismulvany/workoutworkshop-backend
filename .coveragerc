@@ -1,0 +1,8 @@
+[run]
+source = 
+    app
+    routes
+
+[report]
+omit = 
+    tests/*
