@@ -17,7 +17,44 @@ def allowed_file(filename):
 
 @user_bp.route('/upload-profile-picture', methods=['POST'])
 def upload_profile_picture():
-
+    """
+    Must upload the user's profile picture
+    ---
+    tags:
+        - User - Profile
+    consumes:
+        - multipart/form-data
+    parameters:
+        - name: authorization
+          in: header
+          type: string
+          required: true
+          description: Bearer JWT token
+        - name: profile_image
+          in: formData
+          type: file
+          required: true
+          description: Image File (JPG, JPEG, PNG)
+    responses:
+        200:
+            description: Profile Picture is now uploaded successfully
+            schema:
+                type: object
+                properties:
+                    status:
+                        type: string
+                        example: success
+                    message:
+                        type: string
+                    profile_picture_url:
+                        type: string
+        400:
+            description: Invalid File or Missing File
+        401:
+            description: Unauthorized or Invalid Token
+        500:
+            description: Error in the database
+    """
     #verify user token
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -73,6 +110,38 @@ def upload_profile_picture():
 
 @user_bp.route('/update-username', methods=['PUT'])
 def update_username():
+    """
+    Must update the user's username
+    ---
+    tags:
+        - User - Profile
+    parameters:
+        - name: authorization
+          in: header
+          type: string
+          required: true
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+                - new_username
+            properties:
+                new_username:
+                    type: string
+    responses:
+        200:
+            description: Username is now updated successfully
+        400:
+            description: Missing Username
+        401:
+            description: Unauthorized
+        409:
+            description: Username already exists
+        500:
+            description: Error in the database
+    """
     # verify user token
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -125,6 +194,43 @@ def update_username():
 
 @user_bp.route('/update-goals', methods=['PUT'])
 def update_goals():
+    """
+    Must update the user's fitness goals and weight
+    ---
+    tags:
+        - User - Goals
+    parameters:
+        - name: authorization
+          in: header
+          type: string
+          required: true
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+                - current_weight
+                - goal_weight
+            properties:
+                current_weight:
+                    type: number
+                goal_weight:
+                    type: number
+                goal_type:
+                    type: string
+                information:
+                    type: string
+    responses:
+        200:
+            description: The goals are now updated successfully
+        400:
+            description: Invalid Weight Input
+        401:
+            description: Unauthorized
+        500:
+            description: Error in the database
+    """
     # verify user token
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -200,6 +306,24 @@ def update_goals():
 
 @user_bp.route('/delete-account', methods=['DELETE'])
 def delete_account():
+    """
+    Deletes the user account permanently
+    ---
+    tags:
+        - User - Account
+    parameters:
+        - name: authorization
+          in: header
+          type: string
+          required: true
+    responses:
+        200:
+            description: The user account is now deleted successfully
+        401:
+            description: Unauthorized
+        500:
+            description: Error in the database
+    """
     # Verify User token
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -257,6 +381,40 @@ def _decode_user_id_from_token() -> tuple[int | None, str | None]:
 
 @user_bp.route('/check-survey', methods=['GET'])
 def check_survey():
+    """
+    Check if the user has completed the daily survey
+    ---
+    tags:
+        - User - Survey
+    parameters:
+        - name: authorization
+          in: header
+          type: string
+          required: true
+        - name: date
+          in: query
+          type: string
+          description: Date in YYYY-MM-DD format (optional)
+    responses:
+        200:
+            description: Survey status retrieved
+            schema:
+                type: object
+                properties:
+                    status:
+                        type: string
+                    date:
+                        type: string
+                    rating:
+                        type: integer
+                        nullable: true
+        400:
+            description: Invalid Date Format
+        401:
+            description: Unauthorized
+        500:
+            description: Error in the database
+    """
     user_id, auth_error = _decode_user_id_from_token()
     if auth_error:
         return jsonify({'status': 'error', 'message': auth_error}), 401
@@ -308,6 +466,40 @@ def check_survey():
 
 @user_bp.route('/daily-survey', methods=['POST'])
 def save_daily_survey():
+    """
+    Must save or update the user's daily survey rating
+    ---
+    tags:
+        - User - Survey
+    parameters:
+        - name: authorization
+          in: header
+          type: string
+          required: true
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+                - rating
+            properties:
+                rating:
+                    type: integer
+                    example: 4
+                date:
+                    type: string
+                    example: 2026-04-16
+    responses:
+        200:
+            description: The survey is now saved successfully
+        400:
+            description: Invalid rating or date
+        401:
+            description: Unauthorized
+        500:
+            description: Error in the database
+    """
     user_id, auth_error = _decode_user_id_from_token()
     if auth_error:
         return jsonify({'status': 'error', 'message': auth_error}), 401
@@ -399,6 +591,32 @@ def save_daily_survey():
 # check if user has coach, if yes get coach's id for future use
 @user_bp.route('/has-coach/<int:user_id>', methods=['GET'])
 def user_has_coach(user_id):
+    """
+    Checks if the user has a coach
+    ---
+    tags:
+        - User - Coach
+    parameters:
+        - name: user_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Coach status retrieved
+            schema:
+                type: object
+                properties:
+                    status:
+                        type: string
+                    hasCoach:
+                        type: boolean
+                    coach_id:
+                        type: integer
+                        nullable: true
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     try:
         # Main Query to get a single coach data
@@ -426,6 +644,45 @@ def user_has_coach(user_id):
 
 @user_bp.route('/update-payment', methods=['PATCH'])
 def changePayment():
+    """
+    Must create or update the user's payment details
+    ---
+    tags:
+        - User - Payment
+    parameters:
+        - name: authorization
+          in: header
+          type: string
+          required: true
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+                - card_number
+                - card_month
+                - card_year
+                - card_cvv
+            properties:
+                card_number:
+                    type: string
+                card_month:
+                    type: integer
+                card_year:
+                    type: integer
+                card_cvv:
+                    type: string
+    responses:
+        200:
+            description: Payment details updated
+        400:
+            description: Missing Fields
+        401:
+            description: Unauthorized
+        500:
+            description: Error in the database
+    """
     auth_header = request.headers.get('Authorization')
     if not auth_header:
         return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
@@ -510,6 +767,35 @@ def changePayment():
 
 @user_bp.route('/chat/history/<int:me>/<int:other>', methods=['GET'])
 def get_chat_history(me, other):
+    """
+    Must get chat history between the two users
+    ---
+    tags:
+        - User - Chat
+    parameters:
+        - name: me
+          in: path
+          type: integer
+          required: true
+        - name: other
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: List of Messages
+            schema:
+                type: array
+                items:
+                    type: object
+                    properties:
+                        sender_id:
+                            type: integer
+                        text:
+                            type: string
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     query = text("""
         SELECT sender_id, content, created_at 
@@ -525,6 +811,36 @@ def get_chat_history(me, other):
 
 @user_bp.route('/weight-log/<int:user_id>', methods=['GET'])
 def get_weight_logs(user_id):
+    """
+    Must retrieve the user's weight logs
+    ---
+    tags:
+        - User - Progress
+    parameters:
+        - name: user_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: The weight logs are now retrieved
+            schema:
+                type: object
+                properties:
+                    status:
+                        type: string
+                    data:
+                        type: array
+                        items:
+                            type: object
+                            properties:
+                                weight:
+                                    type: number
+                                log_date:
+                                    type: string
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     query = text("""
         SELECT weight, log_date FROM weight_logs
