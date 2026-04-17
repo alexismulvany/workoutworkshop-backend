@@ -333,7 +333,7 @@ def add_workout_to_plan():
 
 # remove individual exercise from daily-workout plan
 @workout_bp.route('/remove', methods=["POST"])
-def remove_workout_from_plan():
+def remove_exercise_from_plan():
     payload = request.get_json(silent=True) or {}
 
     try:
