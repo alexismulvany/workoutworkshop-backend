@@ -535,3 +535,93 @@ def get_weight_logs(user_id):
 
     logs = [dict(row) for row in result]
     return jsonify({'status': 'success', 'data': logs}), 200
+
+
+PROGRESS_UPLOAD_FOLDER = 'static/progress'
+
+
+@user_bp.route('/upload-progress-picture', methods=['POST'])
+def upload_progress_picture():
+    # 1. Get user_id directly from the request form instead of the token
+    user_id = request.form.get('user_id')
+
+    if not user_id:
+        return jsonify({'status': 'error', 'message': 'User ID is required'}), 400
+
+    # 2. Check if the file is in the request
+    if 'progress_image' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No file part found'}), 400
+
+    file = request.files['progress_image']
+    if file.filename == '':
+        return jsonify({'status': 'error', 'message': 'No selected file'}), 400
+
+    if file and allowed_file(file.filename):
+        # Create a unique filename to prevent overwriting
+        import uuid
+        unique_suffix = uuid.uuid4().hex[:8]
+        filename = secure_filename(f"user_{user_id}_{unique_suffix}_{file.filename}")
+
+        # Ensure the directory exists
+        save_dir = os.path.join(current_app.root_path, PROGRESS_UPLOAD_FOLDER)
+        os.makedirs(save_dir, exist_ok=True)
+
+        # Save file to disk
+        filepath = os.path.join(save_dir, filename)
+        file.save(filepath)
+
+        # Create the public URL
+        file_url = f"http://127.0.0.1:5000/{PROGRESS_UPLOAD_FOLDER}/{filename}"
+
+        # 3. Insert into Database
+        db = current_app.extensions['sqlalchemy']
+        try:
+            db.session.execute(
+                text('INSERT INTO Progress_Pictures (user_id, image_url) VALUES (:uid, :url)'),
+                {'uid': user_id, 'url': file_url}
+            )
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'status': 'error', 'message': 'Database error', 'detail': str(e)}), 500
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Progress picture added',
+            'image_url': file_url
+        }), 201
+
+    return jsonify({'status': 'error', 'message': 'Invalid file format'}), 400
+
+
+@user_bp.route('/progress-pictures/<int:target_user_id>', methods=['GET'])
+def get_progress_pictures(target_user_id):
+    db = current_app.extensions['sqlalchemy']
+
+    try:
+        # 1. FETCH PICTURES DIRECTLY BY ID
+        result = db.session.execute(
+            text('''
+                SELECT picture_id, image_url, create_date 
+                FROM Progress_Pictures 
+                WHERE user_id = :uid 
+                ORDER BY create_date DESC
+            '''),
+            {'uid': target_user_id}
+        ).mappings().fetchall()
+
+        # 2. FORMAT DATA
+        pictures = [{
+            'picture_id': row['picture_id'],
+            'image_url': row['image_url'],
+            'create_date': row['create_date'].isoformat()
+        } for row in result]
+
+        return jsonify({
+            'status': 'success',
+            'data': pictures
+        }), 200
+
+    except Exception as e:
+        # Still keeping the try/except block just in case the DB connection fails
+        return jsonify({'status': 'error', 'message': 'Database error', 'detail': str(e)}), 500
