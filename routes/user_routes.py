@@ -536,10 +536,7 @@ def get_weight_logs(user_id):
     logs = [dict(row) for row in result]
     return jsonify({'status': 'success', 'data': logs}), 200
 
-
 PROGRESS_UPLOAD_FOLDER = 'static/progress'
-
-
 @user_bp.route('/upload-progress-picture', methods=['POST'])
 def upload_progress_picture():
     # 1. Get user_id directly from the request form instead of the token
@@ -599,7 +596,6 @@ def get_progress_pictures(target_user_id):
     db = current_app.extensions['sqlalchemy']
 
     try:
-        # 1. FETCH PICTURES DIRECTLY BY ID
         result = db.session.execute(
             text('''
                 SELECT picture_id, image_url, create_date 
@@ -610,7 +606,6 @@ def get_progress_pictures(target_user_id):
             {'uid': target_user_id}
         ).mappings().fetchall()
 
-        # 2. FORMAT DATA
         pictures = [{
             'picture_id': row['picture_id'],
             'image_url': row['image_url'],
@@ -623,5 +618,62 @@ def get_progress_pictures(target_user_id):
         }), 200
 
     except Exception as e:
-        # Still keeping the try/except block just in case the DB connection fails
         return jsonify({'status': 'error', 'message': 'Database error', 'detail': str(e)}), 500
+
+
+@user_bp.route('/delete-progress-picture/<int:picture_id>/<int:user_id>', methods=['DELETE'])
+def delete_progress_picture(picture_id, user_id=None):
+    db = current_app.extensions['sqlalchemy']
+
+    try:
+        if user_id is None:
+            picture = db.session.execute(
+                text('SELECT picture_id, user_id, image_url FROM Progress_Pictures WHERE picture_id = :pid LIMIT 1'),
+                {'pid': picture_id}
+            ).mappings().first()
+        else:
+            picture = db.session.execute(
+                text('SELECT picture_id, user_id, image_url FROM Progress_Pictures WHERE picture_id = :pid AND user_id = :uid LIMIT 1'),
+                {'pid': picture_id, 'uid': user_id}
+            ).mappings().first()
+
+        if not picture:
+            return jsonify({'status': 'error', 'message': 'Progress picture not found'}), 404
+
+        if user_id is None:
+            db.session.execute(
+                text('DELETE FROM Progress_Pictures WHERE picture_id = :pid'),
+                {'pid': picture_id}
+            )
+        else:
+            db.session.execute(
+                text('DELETE FROM Progress_Pictures WHERE picture_id = :pid AND user_id = :uid'),
+                {'pid': picture_id, 'uid': user_id}
+            )
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Failed to delete progress picture', 'detail': str(e)}), 500
+
+    #File cleanup
+    deleted_file = False
+    try:
+        image_url = str((picture.get('image_url') or '')).split('?', 1)[0]
+        filename = os.path.basename(image_url)
+        if filename:
+            file_path = os.path.join(current_app.root_path, PROGRESS_UPLOAD_FOLDER, filename)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+                deleted_file = True
+    except OSError:
+        pass
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Progress picture deleted',
+        'picture_id': picture_id,
+        'user_id': picture.get('user_id'),
+        'deleted_file': deleted_file
+    }), 200
+
