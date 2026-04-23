@@ -469,3 +469,125 @@ def get_coach_id(user_id):
         return jsonify({"status": "success", "coach_id": result[0]}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+    
+@coach_bp.route('/meal-plan/<int:coach_id>/<int:user_id>', methods=['GET'])
+def get_meal_plan(coach_id, user_id):
+    db = current_app.extensions['sqlalchemy']
+    try:
+        weekly = db.session.execute(
+            db.text(
+                'SELECT weekly_meals_id FROM weekly_meals '
+                'WHERE coach_id = :cid AND user_id = :uid LIMIT 1'
+            ),
+            {'cid': coach_id, 'uid': user_id}
+        ).fetchone()
+
+        if not weekly:
+            return jsonify({'status': 'success', 'data': None}), 200
+
+        weekly_id = weekly[0]
+
+        meals = db.session.execute(
+            db.text(
+                'SELECT meal_id, DOW, meal FROM meal_plans '
+                'WHERE weekly_meal_id = :wid'
+            ),
+            {'wid': weekly_id}
+        ).fetchall()
+
+        meal_list = [{'meal_id': m[0], 'dow': m[1], 'meal': m[2]} for m in meals]
+
+        return jsonify({'status': 'success', 'data': meal_list}), 200
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@coach_bp.route('/meal-plan/<int:coach_id>/<int:user_id>', methods=['POST'])
+def save_meal_plan(coach_id, user_id):
+    payload = request.get_json(silent=True) or {}
+    meals = payload.get('meals')
+
+    if not meals:
+        return jsonify({'status': 'error', 'message': 'No meals provided.'}), 400
+
+    db = current_app.extensions['sqlalchemy']
+    session = db.session
+
+    try:
+        weekly = session.execute(
+            db.text(
+                'SELECT weekly_meals_id FROM weekly_meals '
+                'WHERE coach_id = :cid AND user_id = :uid LIMIT 1'
+            ),
+            {'cid': coach_id, 'uid': user_id}
+        ).fetchone()
+
+        if weekly:
+            weekly_id = weekly[0]
+            session.execute(
+                db.text('DELETE FROM meal_plans WHERE weekly_meal_id = :wid'),
+                {'wid': weekly_id}
+            )
+        else:
+            session.execute(
+                db.text(
+                    'INSERT INTO weekly_meals (coach_id, user_id) '
+                    'VALUES (:cid, :uid)'
+                ),
+                {'cid': coach_id, 'uid': user_id}
+            )
+            weekly_id = session.execute(db.text('SELECT LAST_INSERT_ID()')).scalar()
+
+        for meal in meals:
+            session.execute(
+                db.text(
+                    'INSERT INTO meal_plans (DOW, meal, weekly_meal_id) '
+                    'VALUES (:dow, :meal, :wid)'
+                ),
+                {'dow': meal.get('dow'), 'meal': meal.get('meal'), 'wid': weekly_id}
+            )
+
+        session.commit()
+        return jsonify({'status': 'success', 'message': 'Meal plan saved.'}), 200
+
+    except Exception as e:
+        session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@coach_bp.route('/update-plan-title/<int:plan_id>', methods=['PUT'])
+def update_plan_title(plan_id):
+    payload = request.get_json(silent=True) or {}
+    title = payload.get('title')
+    if not title:
+        return jsonify({'status': 'error', 'message': 'Title is required.'}), 400
+    db = current_app.extensions['sqlalchemy']
+    try:
+        db.session.execute(
+            db.text('UPDATE workout_plans SET title = :title WHERE plan_id = :pid'),
+            {'title': title, 'pid': plan_id}
+        )
+        db.session.commit()
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@coach_bp.route('/delete-plan/<int:plan_id>', methods=['DELETE'])
+def delete_workout_plan(plan_id):
+    db = current_app.extensions['sqlalchemy']
+    session = db.session
+    try:
+        session.execute(
+            db.text('DELETE FROM plan_exercise WHERE plan_id = :pid'),
+            {'pid': plan_id}
+        )
+        session.execute(
+            db.text('DELETE FROM workout_plans WHERE plan_id = :pid'),
+            {'pid': plan_id}
+        )
+        session.commit()
+        return jsonify({'status': 'success', 'message': 'Plan deleted.'}), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500

@@ -108,7 +108,7 @@ def save_workout():
 
         # Insert into plan_exercise for each exercise in the workout
         insert_exercise_query = text("""
-                                     INSERT INTO plan_exercise (plan_id, exercise_id, sets, reps, weight)
+                                     INSERT INTO plan_exercise (plan_id, exercise_id, `sets`, reps, weight)
                                      VALUES (:plan_id, :exercise_id, :sets, :reps, :weight)
                                      """)
 
@@ -192,7 +192,7 @@ def update_workout_plan(plan_id):
             update_query = text("""
                                 UPDATE plan_exercise
                                 SET reps   = :reps,
-                                    sets   = :sets,
+                                    `sets`   = :sets,
                                     weight = :weight
                                 WHERE plan_id = :plan_id
                                   AND exercise_id = :exercise_id
