@@ -5,6 +5,17 @@ coach_bp = Blueprint('coach_bp', __name__, url_prefix='/coach')
 
 @coach_bp.route('/coach-data', methods=['GET'])
 def get_coach_data():
+    """
+    Get All Coach Data
+    ---
+    tags:
+        - Coach - Coach Data
+    responses:
+        200:
+            description: All Coach Data Retrieved
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     try:
         # Main Query to get coach data
@@ -26,6 +37,22 @@ def get_coach_data():
 
 @coach_bp.route('/coach-data/<int:coach_id>', methods=['GET'])
 def get_single_coach_data(coach_id):
+    """
+    Get a single Coach Data
+    ---
+    tags:
+        - Coach - Coach Data
+    parameters:
+        - name: coach_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Single Coach Data Retrieved
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     try:
         # Main Query to get coach data
@@ -49,6 +76,24 @@ def get_single_coach_data(coach_id):
 #get the reviews of a coach
 @coach_bp.route('/coach-reviews/<int:coach_id>', methods=['GET'])
 def get_coach_reviews(coach_id):
+    """
+    Get reviews of a coach
+    ---
+    tags:
+        - Coach - Coach Reviews
+    parameters:
+        - name: coach_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Coach review retrieved
+        404:
+            description: Coach not found
+        500:
+            description: Error in the database
+    """    
     db = current_app.extensions['sqlalchemy']
     try:
         # Main Query to get a single coach data
@@ -76,6 +121,26 @@ def get_coach_reviews(coach_id):
 
 @coach_bp.route('/user-coach-sub/<int:user_id>/<int:coach_id>', methods=['GET'])
 def user_coach_sub(user_id, coach_id):
+    """
+    Get user-coach subscription status
+    ---
+    tags:
+        - Coach - User-Coach Subscription Status
+    parameters:
+        - name: user_id
+          in: path
+          type: integer
+          required: true
+        - name: coach_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Status retrieved
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     try:
         # Main Query to get a single coach data
@@ -115,6 +180,22 @@ def user_coach_sub(user_id, coach_id):
 
 @coach_bp.route('/coach-availibility/<int:coach_id>', methods=['GET'])
 def coach_availibility(coach_id):
+    """
+    Get a coach's availibility
+    ---
+    tags:
+        - Coach - User Options
+    parameters:
+        - name: coach_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Coach availibility retrieved
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     try:
         # Main Query to get coach data
@@ -144,6 +225,34 @@ def coach_availibility(coach_id):
 
 @coach_bp.route('/send-user-coach-app', methods=["POST"])
 def send_user_coach_app():
+    """
+    Sends User-Coach Application
+    ---
+    tags:
+        - Coach - Coach Applications
+    parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            required:
+                - user_id
+                - coach_id
+                - comment
+            properties:
+                user_id:
+                    type: integer
+                coach_id:
+                    type: integer
+                comment:
+                    type: string
+    responses:
+        200:
+            description: Application successfully sent
+        400:
+            description: Error sending application/missing fields
+    """
     payload = request.get_json(silent=True) or {}
 
     try:
@@ -176,6 +285,34 @@ def send_user_coach_app():
 
 @coach_bp.route('/send-coach-report', methods=["POST"])
 def send_coach_report():
+    """
+    Sends Coach Report
+    ---
+    tags:
+        - Coach - User Options
+    parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            required:
+                - reporter_id
+                - coach_id
+                - message
+            properties:
+                reporter_id:
+                    type: integer
+                coach_id:
+                    type: integer
+                message:
+                    type: string
+    responses:
+        200:
+            description: Report successfully sent
+        400:
+            description: Error sending report/missing fields
+    """
     payload = request.get_json(silent=True) or {}
 
     try:
@@ -208,6 +345,31 @@ def send_coach_report():
 
 @coach_bp.route('/fire-coach', methods=["POST"])
 def fire_coach():
+    """
+    Fires Coach
+    ---
+    tags:
+        - Coach - User Options
+    parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            required:
+                - user_id
+                - coach_id
+            properties:
+                user_id:
+                    type: integer
+                coach_id:
+                    type: integer
+    responses:
+        200:
+            description: Coach successfully fired
+        400:
+            description: Error firing coach/missing fields
+    """
     payload = request.get_json(silent=True) or {}
 
     try:
@@ -239,6 +401,37 @@ def fire_coach():
 
 @coach_bp.route('/submit-coach-review', methods=['POST'])
 def submit_review():
+    """
+    Sends Coach Review
+    ---
+    tags:
+        - Coach - Coach Reviews
+    parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            required:
+                - user_id
+                - coach_id
+                - rating
+                - message
+            properties:
+                user_id:
+                    type: integer
+                coach_id:
+                    type: integer
+                rating:
+                    type: integer
+                message:
+                    type: string
+    responses:
+        200:
+            description: Review successfully sent
+        400:
+            description: Error sending review/missing fields
+    """
 
     payload = request.get_json(silent=True) or {}
 
@@ -287,6 +480,22 @@ def submit_review():
        
 @coach_bp.route('/requests/<int:coach_id>', methods=['GET'])
 def get_coach_requests(coach_id):
+    """
+    Get Coach Requests for a coach
+    ---
+    tags:
+        - Coach - Coach Applications
+    parameters:
+        - name: coach_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Request list successfully retrieved
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     try:
         query = """
@@ -319,6 +528,40 @@ def get_coach_requests(coach_id):
 
 @coach_bp.route('/requests/<int:request_id>/decision', methods=['POST'])
 def decide_coach_request(request_id):
+    """
+    Sends Coach Application Decision
+    ---
+    tags:
+        - Coach - Coach Applications
+    parameters:
+        - name: request_id
+          in: path
+          type: integer
+          required: true
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            required:
+                - decision
+                - coach_id
+            properties:
+                decision:
+                    type: string
+                    example: 'accepted, rejected'
+                coach_id:
+                    type: integer
+    responses:
+        200:
+            description: Decision successfully sent
+        400:
+            description: Error sending decision/missing fields
+        404:
+            description: Request not found
+        500:
+            description: Error in the database
+    """
     payload = request.get_json(silent=True) or {}
     try:
         decision = payload.get('decision')
@@ -366,6 +609,22 @@ def decide_coach_request(request_id):
 
 @coach_bp.route('/clients/<int:coach_id>', methods=['GET'])
 def get_coach_clients(coach_id):
+    """
+    Get a coach's clients
+    ---
+    tags:
+        - Coach - Coach Clients
+    parameters:
+        - name: coach_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Client list successfully retrieved
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     try:
         query = """
@@ -393,6 +652,22 @@ def get_coach_clients(coach_id):
 
 @coach_bp.route('/profile/<int:coach_id>', methods=['GET'])
 def get_coach_profile(coach_id):
+    """
+    Get a coach's profile
+    ---
+    tags:
+        - Coach - Coach Profile
+    parameters:
+        - name: coach_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Coach profile successfully retrieved
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     try:
         profile = db.session.execute(
@@ -424,6 +699,45 @@ def get_coach_profile(coach_id):
 
 @coach_bp.route('/profile/<int:coach_id>', methods=['PUT'])
 def update_coach_profile(coach_id):
+    """
+    Updates Coach Profile
+    ---
+    tags:
+        - Coach - Coach Profile
+    parameters:
+        - name: coach_id
+          in: path
+          type: integer
+          required: true
+        - name: body
+          in: body
+          schema:
+            type: object
+            required:
+                - bio
+                - pricing
+                - availibility
+            properties:
+                bio:
+                    type: string
+                pricing:
+                    type: string
+                availibility:
+                    type: array
+                    items:
+                        properties:
+                            dow:
+                                type: string
+                            end_time:
+                                type: string
+                            start_time:
+                                type: string
+    responses:
+        200:
+            description: Coach Profile successfully updated
+        500:
+            description: Error in the database
+    """
     payload = request.get_json(silent=True) or {}
     try:
         bio = payload.get('bio')
@@ -458,6 +772,24 @@ def update_coach_profile(coach_id):
 
 @coach_bp.route('/coach-id/<int:user_id>', methods=['GET'])
 def get_coach_id(user_id):
+    """
+    Get Coach ID from User ID
+    ---
+    tags:
+        - Coach - Coach Data
+    parameters:
+        - name: user_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Coach ID successfully retrieved
+        404:
+            description: Coach profile not found
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     try:
         result = db.session.execute(
@@ -472,6 +804,26 @@ def get_coach_id(user_id):
     
 @coach_bp.route('/meal-plan/<int:coach_id>/<int:user_id>', methods=['GET'])
 def get_meal_plan(coach_id, user_id):
+    """
+    Get meal plan
+    ---
+    tags:
+        - Coach - Meal Plan
+    parameters:
+        - name: coach_id
+          in: path
+          type: integer
+          required: true
+        - name: user_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Meal Plan successfully retrieved
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     try:
         weekly = db.session.execute(
@@ -505,6 +857,43 @@ def get_meal_plan(coach_id, user_id):
 
 @coach_bp.route('/meal-plan/<int:coach_id>/<int:user_id>', methods=['POST'])
 def save_meal_plan(coach_id, user_id):
+    """
+    Uploads Meal Plan
+    ---
+    tags:
+        - Coach - Meal Plan
+    parameters:
+        - name: coach_id
+          in: path
+          type: integer
+          required: true
+        - name: user_id
+          in: path
+          type: integer
+          required: true
+        - name: body
+          in: body
+          schema:
+            type: object
+            required:
+                - dow
+                - meal
+                - weekly_id
+            properties:
+                dow:
+                    type: string
+                meal:
+                    type: string
+                weekly_id:
+                    type: integer
+    responses:
+        200:
+            description: Meal Plan successfully saved
+        400:
+            description: No meals provided
+        500:
+            description: Error in the database
+    """
     payload = request.get_json(silent=True) or {}
     meals = payload.get('meals')
 
@@ -557,6 +946,33 @@ def save_meal_plan(coach_id, user_id):
 
 @coach_bp.route('/update-plan-title/<int:plan_id>', methods=['PUT'])
 def update_plan_title(plan_id):
+    """
+    Update Workout Plan title
+    ---
+    tags:
+        - Coach - Coach Workout
+    parameters:
+        - name: plan_id
+          in: path
+          type: integer
+          required: true
+        - name: body
+          in: body
+          schema:
+            type: object
+            required:
+                - title
+            properties:
+                title:
+                    type: string
+    responses:
+        200:
+            description: Workout plan title successfully updated
+        400:
+            description: Title is required
+        500:
+            description: Error in the database
+    """
     payload = request.get_json(silent=True) or {}
     title = payload.get('title')
     if not title:
@@ -575,6 +991,22 @@ def update_plan_title(plan_id):
 
 @coach_bp.route('/delete-plan/<int:plan_id>', methods=['DELETE'])
 def delete_workout_plan(plan_id):
+    """
+    Delete Workout Plan
+    ---
+    tags:
+        - Coach - Coach Workout
+    parameters:
+        - name: plan_id
+          in: path
+          type: integer
+          required: true
+    responses:
+        200:
+            description: Workout Plan successfully deleted
+        500:
+            description: Error in the database
+    """
     db = current_app.extensions['sqlalchemy']
     session = db.session
     try:
