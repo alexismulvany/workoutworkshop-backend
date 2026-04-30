@@ -1,0 +1,40 @@
+name: Backend CI/CD Pipeline
+
+# Tells github to run this script any time any code is pushed to main
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  # Continuous Integration
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11' # This may give an issue if someone else has something older than 3.10
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run Unit Tests
+        run: |
+          pytest # If this doesn't work, use "python -m unittest discover" instead
+
+  # Continuous Deployment
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Deployment Webhook
+        env:
+          DEPLOY_URL: ${{ secrets.DEPLOY_HOOK_URL }}
+        run: |
+          curl -X POST "$DEPLOY_URL"
