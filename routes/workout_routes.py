@@ -864,3 +864,70 @@ def complete_workout():
     except Exception as e:
         print("DATABASE ERROR:", str(e))
         return jsonify({"message": "Error Toggling Exercise Completion"}), 400
+
+
+@workout_bp.route('/weekly-stats/<int:user_id>', methods=['GET'])
+def get_weekly_workout_stats(user_id):
+    """
+    Get the number of workouts per week for a specific user
+    ---
+    tags:
+      - Workout - Stats
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+        description: The unique ID of the user
+        example: 7
+    responses:
+      200:
+        description: Successfully retrieved weekly workout stats
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: success
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  week:
+                    type: string
+                    example: "2026-W16"
+                  workouts:
+                    type: integer
+                    example: 4
+      500:
+        description: Database or server error
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: error
+            message:
+              type: string
+              example: Failed to fetch weekly stats
+    """
+    db = current_app.extensions['sqlalchemy']
+    try:
+        # Groups workouts by week and counts how many occurred
+        query = text("""
+                     SELECT DATE_FORMAT(STR_TO_DATE(planned_date, '%m-%d-%Y'), '%x-W%v') AS week,
+                            COUNT(*)                                                     as workouts
+                     FROM workout_plans
+                     WHERE user_id = :user_id
+                     GROUP BY week
+                     ORDER BY week ASC LIMIT 12
+                     """)
+        result = db.session.execute(query, {"user_id": user_id}).mappings().fetchall()
+        data = [dict(row) for row in result]
+
+        return jsonify({'status': 'success', 'data': data}), 200
+
+    except Exception as e:
+        print("DATABASE ERROR:", str(e))
+        return jsonify({'status': 'error', 'message': 'Failed to fetch weekly stats'}), 500

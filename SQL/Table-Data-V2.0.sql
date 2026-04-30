@@ -1130,6 +1130,13 @@ insert into meal_plans (DOW, meal, weekly_meal_id) values ('M', 'Salmon and Broc
 insert into meal_plans (DOW, meal, weekly_meal_id) values ('TH', 'Beef & Potatos', 3);
 insert into meal_plans (DOW, meal, weekly_meal_id) values ('W', 'Chicken & Broccoli, 250g Chicken', 3);
 
+INSERT INTO calorie_logs (user_id, log_date, calories) VALUES
+(7, '2026-04-23', 2400),
+(7, '2026-04-24', 2550),
+(7, '2026-04-25', 2600),
+(7, '2026-04-26', 2300),
+(7, '2026-04-27', 2450),
+(7, '2026-04-28', 2500);
 
 
 -- update the coaches profiles to have their names and profile pictures
