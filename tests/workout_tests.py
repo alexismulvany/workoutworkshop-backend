@@ -6,6 +6,7 @@ from app import app
 class TestWorkoutRoutes(unittest.TestCase):
 
     def setUp(self):
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
         self.app = app
         self.app.testing = True
         self.client = self.app.test_client()
@@ -101,7 +102,7 @@ class TestWorkoutRoutes(unittest.TestCase):
             "user_id": 1,
             "date": "MON",
             "workout_name": "Push",
-            "exercises": []
+            "exercises": [{"exercise_id": 1, "sets": 3, "reps": 10}]
         }
 
         response = self.client.post('/api/workouts/save', json=payload)

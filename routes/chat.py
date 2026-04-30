@@ -7,6 +7,43 @@ def register_chat_events(socketio, app):
 
     @app.route('/api/contacts/<int:user_id>', methods=['GET'])
     def get_contacts(user_id):
+        """
+                Fetch chat contacts for a specific user
+                ---
+                tags:
+                  - Chat
+                parameters:
+                  - name: user_id
+                    in: path
+                    type: integer
+                    required: true
+                    description: The ID of the user fetching their contact list
+                responses:
+                  200:
+                    description: A list of contacts (Coaches for Clients, or Clients for Coaches)
+                    schema:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          example: success
+                        data:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              user_id:
+                                type: integer
+                              first_name:
+                                type: string
+                              last_name:
+                                type: string
+                              role:
+                                type: string
+                                example: "C"
+                  500:
+                    description: Database error
+                """
         db = current_app.extensions['sqlalchemy']
         try:
             # First, get the role of the current user
@@ -73,6 +110,45 @@ def register_chat_events(socketio, app):
 
     @app.route('/chat/history/<int:user_id>/<int:contact_id>', methods=['GET'])
     def get_chat_history(user_id, contact_id):
+        """
+            Retrieve the message history between two users
+            ---
+            tags:
+              - Chat
+            parameters:
+              - name: user_id
+                in: path
+                type: integer
+                required: true
+                description: The ID of the current user
+              - name: contact_id
+                in: path
+                type: integer
+                required: true
+                description: The ID of the person they are chatting with
+            responses:
+              200:
+                description: A chronological list of messages
+                schema:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      sender_id:
+                        type: integer
+                        example: 1
+                      receiver_id:
+                        type: integer
+                        example: 2
+                      text:
+                        type: string
+                        example: "Hello, how are you?"
+                      timestamp:
+                        type: string
+                        example: "2023-10-27 10:30:00"
+              500:
+                description: Database error
+            """
         db = current_app.extensions['sqlalchemy']
         try:
             query = text("""

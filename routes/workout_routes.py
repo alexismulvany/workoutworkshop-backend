@@ -297,8 +297,55 @@ def get_workout_log(user_id):
 
 @workout_bp.route('/plan/<int:plan_id>', methods=['GET'])
 def get_workout_plan_details(plan_id):
+    """
+        Fetch the list of exercises assigned to a specific workout plan
+        ---
+        tags:
+          - Workout - Plans
+        parameters:
+          - name: plan_id
+            in: path
+            type: integer
+            required: true
+            description: The ID of the workout plan
+        responses:
+          200:
+            description: A list of exercises in the plan
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: success
+                data:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      exercise_id:
+                        type: integer
+                        example: 10
+                      exercise_name:
+                        type: string
+                        example: Bench Press
+                      video_url:
+                        type: string
+                        example: "http://example.com/video"
+                      thumbnail:
+                        type: string
+                      sets:
+                        type: integer
+                        example: 3
+                      reps:
+                        type: integer
+                        example: 10
+                      weight:
+                        type: integer
+                        example: 135
+          500:
+            description: Database error
+        """
     db = current_app.extensions['sqlalchemy']
-
     try:
         # Join the plan_exercise table with the exercises table to get the names/urls
         query = text("""
@@ -320,10 +367,56 @@ def get_workout_plan_details(plan_id):
 
 @workout_bp.route('/plan/<int:plan_id>', methods=['PUT'])
 def update_workout_plan(plan_id):
+    """
+        Update the sets, reps, and weight for exercises in a specific plan
+        ---
+        tags:
+          - Workout - Plans
+        parameters:
+          - name: plan_id
+            in: path
+            type: integer
+            required: true
+            description: The ID of the workout plan to update
+          - in: body
+            name: body
+            required: true
+            schema:
+              type: object
+              properties:
+                exercises:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - exercise_id
+                    properties:
+                      exercise_id:
+                        type: integer
+                        example: 5
+                      sets:
+                        type: integer
+                        example: 3
+                      reps:
+                        type: integer
+                        example: 12
+                      weight:
+                        type: integer
+                        example: 50
+        responses:
+          200:
+            description: Workout plan updated successfully
+          400:
+            description: No exercises provided in the request
+          500:
+            description: Database error
+        """
     db = current_app.extensions['sqlalchemy']
     data = request.json
     exercises = data.get('exercises', [])
 
+    if not exercises:
+        return jsonify({'status': 'error', 'message': 'No exercises provided for update'}), 400
     try:
         # Loop through exercise and update each one in the plan_exercise table
         for ex in exercises:
@@ -356,8 +449,47 @@ def update_workout_plan(plan_id):
 
 @workout_bp.route('/plan/<int:plan_id>/exercise/<int:exercise_id>', methods=['DELETE'])
 def remove_exercise_from_log(plan_id, exercise_id):
+    """
+        Remove a specific exercise from a workout plan
+        ---
+        tags:
+          - Workout - Plans
+        parameters:
+          - name: plan_id
+            in: path
+            type: integer
+            required: true
+            description: The ID of the workout plan
+          - name: exercise_id
+            in: path
+            type: integer
+            required: true
+            description: The ID of the exercise to remove from the plan
+        responses:
+          200:
+            description: Exercise successfully removed from the plan
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: success
+                message:
+                  type: string
+                  example: Exercise removed from workout!
+          500:
+            description: Database error
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: error
+                message:
+                  type: string
+                  example: Failed to remove exercise
+        """
     db = current_app.extensions['sqlalchemy']
-
     try:
         # Delete the exercise from the plan_exercise table for the given plan_id and exercise_id
         delete_query = text("""
@@ -660,6 +792,50 @@ def edit_exercise():
 # toggle complete flag on exercise for home page
 @workout_bp.route('/complete-exercise', methods=['POST'])
 def complete_workout():
+    """
+        Toggle the completion status of an exercise in a workout plan
+        ---
+        tags:
+          - Workout - Execution
+        parameters:
+          - in: body
+            name: body
+            required: true
+            schema:
+              type: object
+              required:
+                - plan_exercise_id
+                - complete
+              properties:
+                plan_exercise_id:
+                  type: integer
+                  description: The unique ID for the exercise entry in the plan
+                  example: 15
+                complete:
+                  type: boolean
+                  description: The new completion status (true for finished, false for unfinished)
+                  example: true
+        responses:
+          200:
+            description: Exercise completion status updated successfully
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Exercise Completion Toggled
+          400:
+            description: Invalid request - missing fields or database error
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: error
+                message:
+                  type: string
+                  example: failed to recieve plan_exercise_id or completed flag
+        """
     payload = request.get_json(silent=True) or {}
 
     try:

@@ -918,40 +918,42 @@ def exercises(): # Search by Name or Shows the Default List
 @admin_bp.route('/admin/exercises/add', methods=['POST'])
 def add_exercise():
     """
-    Choosing to add a new exercise
-    ---
-    tags:
-        - Admin - Exercises
-    parameters:
-        - in: body
-          name: body
-          required: true
-          schema:
-            type: object
-            required:
-              - user_id
-              - name
-              - muscle_group
-              - equipment_needed
-            properties:
-              user_id:
-                type: integer
-              name:
-                type: string
-              muscle_group:
-                type: string
-              equipment_needed:
-                type: string
-              video_url:
-                type: string
-    responses:
-        200:
-          description: The exercise is now added
-        400:
-          description: There is an invalid input
-        500:
-          description: Error in the database
-    """
+        Add a new exercise with an optional thumbnail image
+        ---
+        tags:
+          - Admin - Exercises
+        consumes:
+          - multipart/form-data
+        parameters:
+          - name: name
+            in: formData
+            type: string
+            required: true
+            example: "Bench Press"
+          - name: muscle_group
+            in: formData
+            type: string
+            required: true
+            example: "Chest"
+          - name: equipment_needed
+            in: formData
+            type: string
+            required: true
+            example: "Free Weight"
+          - name: video_url
+            in: formData
+            type: string
+            example: "youtube.com/example"
+          - name: thumbnail
+            in: formData
+            type: file
+            description: The image file for the exercise thumbnail
+        responses:
+          201:
+            description: Exercise added successfully
+          500:
+            description: Database error or invalid file format
+        """
     db = current_app.extensions['sqlalchemy']
     # 1. Read the standard text fields from Form Data instead of JSON
     user_id = request.form.get('user_id')
@@ -998,28 +1000,23 @@ def add_exercise():
 @admin_bp.route('/admin/exercises/remove/<int:exercise_id>', methods=['DELETE'])
 def exercise_remove(exercise_id): # Updated for Exercise Removed
     """
-    Choosing to remove an exercise (soft delete)
-    ---
-    tags:
-        - Admin - Exercises
-    parameters:
-        - name: exercise_id
-          in: path
-          type: integer
-          required: true
-        - in: body
-          name: body
-          schema:
-            type: object
-            properties:
-              user_id:
-                type: integer
-    responses:
-        200:
-          description: The exercise is now removed
-        500:
-          description: Error in the database
-    """
+        Remove an exercise from the database
+        ---
+        tags:
+          - Admin - Exercises
+        parameters:
+          - name: exercise_id
+            in: path
+            type: integer
+            required: true
+        responses:
+          200:
+            description: Exercise removed successfully
+          404:
+            description: Exercise not found
+          500:
+            description: Database error
+        """
     db = current_app.extensions['sqlalchemy']
     data = request.get_json()
     admin_id = data.get("user_id")
@@ -1053,44 +1050,39 @@ def exercise_remove(exercise_id): # Updated for Exercise Removed
 @admin_bp.route('/admin/exercises/update/<int:exercise_id>', methods=['PUT'])
 def update_exercise(exercise_id):
     """
-        Choosing to edit an exercise
-        ---
-        tags:
-            - Admin - Exercises
-        parameters:
-            - name: exercise_id
-              in: path
-              type: integer
-              required: true
-            - in: body
-              name: body
-              required: true
-              schema:
-                type: object
-                required:
-                  - user_id
-                  - name
-                  - muscle_group
-                  - equipment_needed
-                properties:
-                  user_id:
-                    type: integer
-                  name:
-                    type: string
-                  muscle_group:
-                    type: string
-                  equipment_needed:
-                    type: string
-                  video_url:
-                    type: string
-        responses:
-            200:
-              description: The exercise is now edited
-            400:
-              description: There is an invalid input
-            500:
-              description: Error in the database
-        """
+    Update an existing exercise details or thumbnail
+    ---
+    tags:
+      - Admin - Exercises
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: exercise_id
+        in: path
+        type: integer
+        required: true
+      - name: name
+        in: formData
+        type: string
+      - name: muscle_group
+        in: formData
+        type: string
+      - name: equipment_needed
+        in: formData
+        type: string
+      - name: video_url
+        in: formData
+        type: string
+      - name: thumbnail
+        in: formData
+        type: file
+        description: New image file to replace the current thumbnail
+    responses:
+      200:
+        description: Exercise updated successfully
+      500:
+        description: Database error
+    """
     db = current_app.extensions['sqlalchemy']
 
     # 1. Read the standard text fields

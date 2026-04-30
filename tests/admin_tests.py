@@ -7,6 +7,7 @@ from user_tests import generate_test_token
 class TestAdminRoutes(unittest.TestCase):
     
     def setUp(self):
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
         app.config["TESTING"] = True
         self.client = app.test_client()
     
