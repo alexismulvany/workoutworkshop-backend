@@ -279,7 +279,17 @@ CREATE TABLE weekly_meals(
                              foreign KEY (coach_id) REFERENCES coach_profiles(coach_id)
 );
 
--- store coach mode nutirition plans
+-- stores user's daily caloric intake for a given day
+CREATE TABLE calorie_logs(
+                            log_id integer auto_increment NOT NULL,
+                            user_id integer NOT NULL,
+                            log_date DATE NOT NULL,
+                            calories integer NOT NULL,
+                            PRIMARY KEY (log_id),
+                            FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- store coach mode nutrition plans
 CREATE TABLE meal_plans(
                            meal_id integer auto_increment NOT NULL,
                            DOW ENUM('M', 'T', 'W', 'TH', 'F', 'SAT', 'SUN') NOT NULL,
@@ -290,7 +300,6 @@ CREATE TABLE meal_plans(
 );
 
 -- stores messages and determines who is receiving the message
-
 create table message(
                         message_id integer auto_increment not null,
                         sender_id integer not null, -- sender of message

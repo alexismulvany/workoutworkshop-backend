@@ -1064,3 +1064,121 @@ def delete_progress_picture(picture_id, user_id=None):
         'deleted_file': deleted_file
     }), 200
 
+
+@user_bp.route('/survey-log/<int:user_id>', methods=['GET'])
+def get_survey_logs(user_id):
+    """
+    Get the recent daily survey ratings for a specific user
+    ---
+    tags:
+      - User - Survey
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+        description: The unique ID of the user
+        example: 7
+    responses:
+      200:
+        description: Successfully retrieved survey logs
+        # ... (rest of swagger docs stay the same)
+    """
+    db = current_app.extensions['sqlalchemy']
+    try:
+        # CHANGED: Select 'result' and alias it as 'rating'
+        query = text("""
+                     SELECT date, result as rating
+                     FROM daily_survey
+                     WHERE user_id = :user_id
+                     ORDER BY date ASC
+                         LIMIT 30
+                     """)
+        result = db.session.execute(query, {"user_id": user_id}).mappings().fetchall()
+
+        # Format the dates for the frontend
+        data = []
+        for row in result:
+            data.append({
+                "date": row['date'].strftime('%b %d') if hasattr(row['date'], 'strftime') else row['date'],
+                "rating": row['rating']
+            })
+
+        return jsonify({'status': 'success', 'data': data}), 200
+
+    except Exception as e:
+        print("DATABASE ERROR:", str(e))
+        return jsonify({'status': 'error', 'message': 'Failed to fetch survey logs'}), 500
+
+
+@user_bp.route('/calorie-log/<int:user_id>', methods=['GET'])
+def get_calorie_logs(user_id):
+    """
+    Get the recent daily calorie logs for a specific user
+    ---
+    tags:
+      - User - Nutrition
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+        description: The unique ID of the user
+        example: 7
+    responses:
+      200:
+        description: Successfully retrieved calorie logs
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: success
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    example: "Apr 28"
+                  calories:
+                    type: integer
+                    example: 2500
+      500:
+        description: Database or server error
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: error
+            message:
+              type: string
+              example: Failed to fetch calorie logs
+    """
+    db = current_app.extensions['sqlalchemy']
+    try:
+        # Get the last 30 days of calorie logs, ordered by date
+        query = text("""
+                     SELECT log_date as date, calories
+                     FROM calorie_logs
+                     WHERE user_id = :user_id
+                     ORDER BY date ASC
+                         LIMIT 30
+                     """)
+        result = db.session.execute(query, {"user_id": user_id}).mappings().fetchall()
+
+        # Format the dates for the frontend graph (e.g., "Apr 28")
+        data = []
+        for row in result:
+            data.append({
+                "date": row['date'].strftime('%b %d') if hasattr(row['date'], 'strftime') else row['date'],
+                "calories": row['calories']
+            })
+
+        return jsonify({'status': 'success', 'data': data}), 200
+
+    except Exception as e:
+        print("DATABASE ERROR:", str(e))
+        return jsonify({'status': 'error', 'message': 'Failed to fetch calorie logs'}), 500

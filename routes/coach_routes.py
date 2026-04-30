@@ -709,40 +709,63 @@ def update_coach_profile(coach_id):
           in: path
           type: integer
           required: true
+          description: The unique ID of the coach
         - name: body
           in: body
+          required: true
           schema:
             type: object
-            required:
-                - bio
-                - pricing
-                - availibility
             properties:
                 bio:
                     type: string
+                    example: "Expert strength and conditioning coach with 5 years of experience."
                 pricing:
-                    type: string
-                availibility:
+                    type: number
+                    example: 75.50
+                availability:
                     type: array
                     items:
+                        type: object
                         properties:
                             dow:
                                 type: string
-                            end_time:
-                                type: string
+                                description: Day of the week (e.g., 'M', 'T', 'W')
+                                example: "M"
                             start_time:
                                 type: string
+                                example: "08:00:00"
+                            end_time:
+                                type: string
+                                example: "17:00:00"
     responses:
         200:
             description: Coach Profile successfully updated
+            schema:
+                type: object
+                properties:
+                    status:
+                        type: string
+                        example: success
+                    message:
+                        type: string
+                        example: Profile updated successfully.
         500:
             description: Error in the database
+            schema:
+                type: object
+                properties:
+                    status:
+                        type: string
+                        example: error
+                    message:
+                        type: string
+                        example: Error message details
     """
     payload = request.get_json(silent=True) or {}
     try:
         bio = payload.get('bio')
         pricing = payload.get('pricing')
-        availability = payload.get('availability')
+        availability = payload.get('availability') # Fixed typo here to match
 
         db = current_app.extensions['sqlalchemy']
         session = db.session
@@ -769,6 +792,7 @@ def update_coach_profile(coach_id):
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+		
 
 @coach_bp.route('/coach-id/<int:user_id>', methods=['GET'])
 def get_coach_id(user_id):
@@ -855,7 +879,7 @@ def get_meal_plan(coach_id, user_id):
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-@coach_bp.route('/meal-plan/<int:coach_id>/<int:user_id>', methods=['POST'])
+@coach_bp.route('/save-meal-plan/<int:coach_id>/<int:user_id>', methods=['POST'])
 def save_meal_plan(coach_id, user_id):
     """
     Uploads Meal Plan
@@ -867,32 +891,71 @@ def save_meal_plan(coach_id, user_id):
           in: path
           type: integer
           required: true
+          description: The unique ID of the coach
         - name: user_id
           in: path
           type: integer
           required: true
+          description: The unique ID of the user receiving the meal plan
         - name: body
           in: body
+          required: true
           schema:
             type: object
             required:
-                - dow
-                - meal
-                - weekly_id
+                - meals
             properties:
-                dow:
-                    type: string
-                meal:
-                    type: string
-                weekly_id:
-                    type: integer
+                meals:
+                    type: array
+                    description: A list of meals assigned to specific days of the week
+                    items:
+                        type: object
+                        required:
+                            - dow
+                            - meal
+                        properties:
+                            dow:
+                                type: string
+                                description: Day of the week (e.g., 'M', 'T', 'W', 'TH', 'F', 'SAT', 'SUN')
+                                example: "M"
+                            meal:
+                                type: string
+                                description: Description of the meal plan for that day
+                                example: "Breakfast: Oatmeal. Lunch: Chicken & Rice. Dinner: Steak & Potatoes."
     responses:
         200:
             description: Meal Plan successfully saved
+            schema:
+                type: object
+                properties:
+                    status:
+                        type: string
+                        example: success
+                    message:
+                        type: string
+                        example: Meal plan saved.
         400:
-            description: No meals provided
+            description: No meals provided in the payload
+            schema:
+                type: object
+                properties:
+                    status:
+                        type: string
+                        example: error
+                    message:
+                        type: string
+                        example: No meals provided.
         500:
             description: Error in the database
+            schema:
+                type: object
+                properties:
+                    status:
+                        type: string
+                        example: error
+                    message:
+                        type: string
+                        example: Error message details
     """
     payload = request.get_json(silent=True) or {}
     meals = payload.get('meals')
@@ -943,6 +1006,7 @@ def save_meal_plan(coach_id, user_id):
     except Exception as e:
         session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 @coach_bp.route('/update-plan-title/<int:plan_id>', methods=['PUT'])
 def update_plan_title(plan_id):
