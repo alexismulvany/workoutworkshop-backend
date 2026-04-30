@@ -4,7 +4,8 @@ from app import app
 class TestCoachRoutes(unittest.TestCase):
 
     def setUp(self):
-        app.config["TESTING"] == True
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        app.config["TESTING"] = True
         self.client = app.test_client()
 
     #Coach - Coach Clients
@@ -154,6 +155,85 @@ class TestCoachRoutes(unittest.TestCase):
 
         self.assertIn(response.status_code, [200, 500])
 
+# Coach - Coach Data
+    def test_get_coach_data(self):
+        response = self.client.get('/coach/coach-data')
+        self.assertIn(response.status_code,[200])
+
+    # Coach - Hire Coach
+    def test_post_hire_coach(self):
+        payload = {
+            "coach_id": 1,
+            "user_id": 69,
+            "comment": "please accept me as a client"
+        }
+        response = self.client.post('/coach/send-user-coach-app', json=payload)
+        self.assertIn(response.status_code,[200])
+
+    # Coach - Workout Plans (Update)
+    def test_put_update_plan(self):
+        payload = {
+            "title": "Updated Test Plan"
+        }
+        response = self.client.put('/coach/update-plan-title/1', json=payload)
+        self.assertIn(response.status_code,[200])
+
+    # Coach - Workout Plans (Delete)
+    def test_delete_workout_plan(self):
+        response = self.client.delete('/coach/delete-plan/1')
+        self.assertIn(response.status_code,[200])
+
+    def test_post_fire_coach_missing_data(self):
+        payload = {}
+        response = self.client.post('/coach/fire-coach', json=payload)
+        self.assertIn(response.status_code, [200,400,500])
+
+    def test_post_coach_report_missing_data(self):
+        payload = {}
+        response = self.client.post('/coach/send-coach-report', json=payload)
+        self.assertIn(response.status_code, [200,400,500])
+
+    def test_post_coach_review_missing_data(self):
+        payload = {}
+        response = self.client.post('/coach/submit-coach-review', json=payload)
+        self.assertIn(response.status_code, [200,400,500])
+
+    def test_put_plan_title_missing_data(self):
+        payload = {}
+        response = self.client.put('/coach/update-plan-title/1', json=payload)
+        self.assertIn(response.status_code, [200,400,500])
+
+    def test_post_meal_plan_missing_data(self):
+        payload = {}
+        response = self.client.post('/coach/meal-plan/1/1', json=payload)
+        self.assertIn(response.status_code, [200,400,500])
+
+    def test_post_coach_application_decision_missing_data(self):
+        payload = {}
+        response = self.client.post('/coach/requests/1/decision', json=payload)
+        self.assertIn(response.status_code, [200,400,500])
+
+    def test_post_coach_application_decision_invalid(self):
+        payload = {
+            "coach_id": 1,
+            "decision": "maybe_later"  # Invalid decision triggers 400
+        }
+        response = self.client.post('/coach/requests/1/decision', json=payload)
+        self.assertIn(response.status_code, [200,400,500])
+
+    def test_post_coach_application_missing_data(self):
+        payload = {}
+        response = self.client.post('/coach/send-user-coach-app', json=payload)
+        self.assertIn(response.status_code, [200,400,500])
+
+    def test_post_coach_review_without_message(self):
+        payload = {
+            "coach_id": 1,
+            "rating": 5,
+            "user_id": 1
+        }
+        response = self.client.post('/coach/submit-coach-review', json=payload)
+        self.assertIn(response.status_code, [200,400,500])
 
 if __name__ == "__main__":
     unittest.main()

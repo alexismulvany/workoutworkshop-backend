@@ -859,6 +859,32 @@ def get_weight_logs(user_id):
 
 @user_bp.route('/upload-progress-picture', methods=['POST'])
 def upload_progress_picture():
+    """
+        Upload a new progress picture for a user
+        ---
+        tags:
+          - User - Progress Pictures
+        consumes:
+          - multipart/form-data
+        parameters:
+          - name: user_id
+            in: formData
+            type: integer
+            required: true
+            description: The ID of the user uploading the picture
+          - name: progress_image
+            in: formData
+            type: file
+            required: true
+            description: The image file to upload
+        responses:
+          201:
+            description: Progress picture added successfully
+          400:
+            description: Missing data or invalid file format
+          500:
+            description: Database error
+        """
     # 1. Get user_id directly from the request form instead of the token
     user_id = request.form.get('user_id')
 
@@ -913,6 +939,23 @@ def upload_progress_picture():
 
 @user_bp.route('/progress-pictures/<int:target_user_id>', methods=['GET'])
 def get_progress_pictures(target_user_id):
+    """
+        Retrieve all progress pictures for a specific user
+        ---
+        tags:
+          - User - Progress Pictures
+        parameters:
+          - name: target_user_id
+            in: path
+            type: integer
+            required: true
+            description: The ID of the user whose pictures are being requested
+        responses:
+          200:
+            description: A list of progress pictures
+          500:
+            description: Database error
+        """
     db = current_app.extensions['sqlalchemy']
 
     try:
@@ -943,6 +986,30 @@ def get_progress_pictures(target_user_id):
 
 @user_bp.route('/delete-progress-picture/<int:picture_id>/<int:user_id>', methods=['DELETE'])
 def delete_progress_picture(picture_id, user_id=None):
+    """
+        Delete a specific progress picture and remove the file from storage
+        ---
+        tags:
+          - User - Progress Pictures
+        parameters:
+          - name: picture_id
+            in: path
+            type: integer
+            required: true
+            description: The ID of the picture to delete
+          - name: user_id
+            in: path
+            type: integer
+            required: true
+            description: The ID of the user who owns the picture
+        responses:
+          200:
+            description: Progress picture deleted successfully
+          404:
+            description: Picture not found
+          500:
+            description: Database error or file cleanup failure
+        """
     db = current_app.extensions['sqlalchemy']
 
     try:

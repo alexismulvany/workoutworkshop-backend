@@ -11,6 +11,7 @@ class TestAuthRoutes(unittest.TestCase):
 
     #clears out user registration test data to ensure consistent test results and avoid conflicts with existing users
     def setUp(self):
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
         app.config["TESTING"] = True
         app.config["JWT_SECRET_KEY"] = "test_secret_key"
         self.client = app.test_client()

@@ -30,6 +30,7 @@ def generate_test_token(user_id=1, username="testuser", role="U"):
 class TestUserRoutes(unittest.TestCase):
 
     def setUp(self):
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
         app.config["TESTING"] = True
         self.client = app.test_client()
         self.token = generate_test_token()
