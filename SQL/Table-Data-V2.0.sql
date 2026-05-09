@@ -1113,7 +1113,7 @@ VALUES
     ('Jogging', 'Cardio', 'Machine', 0, 'https://youtu.be/P8fmIvqQEf4?si=RmbqI5mqI-ZQcV72', 'https://workoutworkshop-backend.onrender.com/static/workouts/jogging.jpg'),
     ('Shoulder Press', 'Arms', 'Free Weight', 0, 'https://youtu.be/0JfYxMRsUCQ?si=BBQ5voUFpbwdEMQH', 'https://workoutworkshop-backend.onrender.com/static/workouts/shoulderpress.jpg'),
     ('Lat Pull down', 'Back', 'Machine', 0, 'https://youtu.be/AOpi-p0cJkc?si=X16IPY0FbbVJE7n6', 'https://workoutworkshop-backend.onrender.com/static/workouts/latpulldown.jpg'),
-    ('Curls', 'Arms', 'Free Weight', 0, 'https://youtu.be/6DeLZ6cbgWQ?si=vYmm8KP-UMPasG81', 'https://workoutworkshop-backend.onrender.com/static/workouts/curls.jpg'),
+    ('Bicep Curls', 'Arms', 'Free Weight', 0, 'https://youtu.be/6DeLZ6cbgWQ?si=vYmm8KP-UMPasG81', 'https://workoutworkshop-backend.onrender.com/static/workouts/curls.jpg'),
     ('Skull Crushers', 'Arms', 'Free Weight', 0, 'https://youtu.be/GaK2da6B2zM?si=H8wjnsWGOiIm_JnU', 'https://workoutworkshop-backend.onrender.com/static/workouts/skullcrushers.jpg'),
     ('Cable Extensions', 'Arms', 'Machine', 0, 'https://youtu.be/JDEDaZTEzGE?si=JLtn1lNg7wkZhex-', 'https://workoutworkshop-backend.onrender.com/static/workouts/cableextensions.jpg'),
     ('Pull up', 'Back', 'Body Weight', 0, 'https://youtu.be/Q_7jVfN4FRQ?si=QnpFpfvx-DkS7rH6', 'https://workoutworkshop-backend.onrender.com/static/workouts/pullup.jpg'),
